@@ -13,6 +13,7 @@ dependencies = [
     "numpy",
     "scipy",
     "torch",
+    "matplotlib",
 ]
 
 [tool.pytest.ini_options]
