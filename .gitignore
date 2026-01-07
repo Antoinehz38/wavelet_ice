@@ -1,0 +1,70 @@
+# Environnements virtuels
+.venv/
+venv/
+env/
+ENV/
+
+# Cache Python/compilé
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+wheelhouse/
+*.whl
+
+# Install logs / coverage / tests
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+
+# IDEs / éditeurs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Jupyter
+.ipynb_checkpoints
+
+# Données et sorties
+data/
+datasets/
+outputs/
+results/
+*.h5
+*.npz
+*.npy
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets / env
+.env
+.env.local
+.env.*
+.secret
+
+# Fichiers binaires / libs
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+
+# Logs
+*.log
+logs/
