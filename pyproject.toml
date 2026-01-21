@@ -13,6 +13,9 @@ dependencies = [
     "numpy",
     "scipy",
     "torch",
+    "matplotlib",
+    "opencv-python",
+    "PyWavelets"
 ]
 
 [tool.pytest.ini_options]
