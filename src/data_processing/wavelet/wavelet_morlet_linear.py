@@ -7,11 +7,11 @@ import json
 import datetime
 
 # --- CONFIGURATION ---
-INPUT_FILE = "/raid/spawc21_challenge_dataset/train/west-wideband-modrec-ex2-tmpl3-20.04.sigmf-data"
-META_FILE = "/raid/spawc21_challenge_dataset/train/west-wideband-modrec-ex2-tmpl3-20.04.sigmf-meta"
-OUTPUT_DIR = "/home/cei_ice_2025/guido_leteurtre_hanachowicz/wavelet_ice/data/wavelet_morlet"
+INPUT_FILE = "data/baseline/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-data"
+META_FILE = "data/baseline/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-meta"
+OUTPUT_DIR = "data/wavelet_morlet"
 
-DURATION_TO_READ = 20_000      # Largeur temporelle pour la visualisation
+DURATION_TO_READ = 600_000      # Largeur temporelle pour la visualisation
 IMG_HEIGHT = 512               # Hauteur totale de l'image (Puissance de 2 recommandée pour CNN)
 SAMPLE_RATE = 1.0              # Fs normalisée
 
@@ -99,8 +99,10 @@ def freq_to_pixel_linear(target_freq, total_height, f_max=0.5):
     # pixel = total_height * (0.5 - freq) / 1.0
     
     # Clamp pour éviter de sortir de l'image
-    if target_freq > f_max: target_freq = f_max
-    if target_freq < -f_max: target_freq = -f_max
+    if target_freq > f_max:
+        target_freq = f_max
+    if target_freq < -f_max:
+        target_freq = -f_max
         
     y_pixel = total_height * (f_max - target_freq) / (2 * f_max)
     
