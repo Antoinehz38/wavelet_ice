@@ -3,11 +3,11 @@ import os, json
 import numpy as np
 
 OUT_DIR = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/baseline"
-META_PATH = "/home/antoine/Downloads/west-wideband-modrec-ex100-tmpl15-20.04.sigmf-meta"
+META_PATH = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/baseline/west-wideband-modrec-ex100-tmpl15-20.04.sigmf-meta"
 
 NFFT = 512
 EPS = 1e-12
-FRAMES_PER_CHUNK = 4096  # baisse si RAM faible
+FRAMES_PER_CHUNK = 4096  
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -49,8 +49,8 @@ if __name__ == "__main__":
 
             iq = (raw[0::2].astype(np.float32) + 1j * raw[1::2].astype(np.float32)) / 32768.0
             x = iq.reshape(frames, NFFT)
-            X = np.fft.fft(x, n=NFFT, axis=1)              # fidèle papier: pas de fftshift
-            L = np.log(np.abs(X) + EPS).astype(np.float32) # log(|FFT|)
+            X = np.fft.fft(x, n=NFFT, axis=1)             
+            L = np.log(np.abs(X) + EPS).astype(np.float32) 
 
             out[t:t+frames, :] = L
             t += frames
