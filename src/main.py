@@ -3,7 +3,8 @@ from src.data_processing.tools import evaluations, dsp, loaders, viz, vision
 
 
 PARAMS = {
-    'duration': 200_000,
+    'offset': 0,
+    'duration': 20_000,
     'fs': 1.0,
     'img_height': 512,
     'f_min': 0.005,
@@ -28,10 +29,16 @@ def main():
         meta_file = input_file.replace(".sigmf-data", ".sigmf-meta")
         print(f'meta_file = {meta_file}')
 
+    if args.duration:
+        PARAMS['duration'] = args.duration
+
+    if args.offset:
+        PARAMS['offset'] = args.offset
+
     output_dir = str(args.output)
     loaders.ensure_dir(output_dir)
 
-    sig = loaders.load_iq_data(input_file, PARAMS['duration'])
+    sig = loaders.load_iq_data(input_file, PARAMS['duration'], offset=PARAMS['offset'])
     meta = loaders.load_metadata(meta_file)
     
     if sig is None: return

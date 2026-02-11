@@ -37,6 +37,13 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Offset in the document"
+    )
+
+    parser.add_argument(
         "--transfoType",
         type=str,
         default="morlet",
