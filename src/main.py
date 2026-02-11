@@ -23,8 +23,10 @@ def main():
     args = parse_args()
     input_file = str(args.input)
     meta_file = str(args.meta)
-    if not meta_file:
+
+    if meta_file == 'None':
         meta_file = input_file.replace(".sigmf-data", ".sigmf-meta")
+        print(f'meta_file = {meta_file}')
 
     output_dir = str(args.output)
     loaders.ensure_dir(output_dir)

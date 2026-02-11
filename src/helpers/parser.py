@@ -18,6 +18,7 @@ def parse_args():
         "--meta",
         type=Path,
         required=False,
+        default=None,
         help="Chemin vers le fichier .sigmf-meta"
     )
 
