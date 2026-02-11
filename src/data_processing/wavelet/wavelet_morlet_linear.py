@@ -8,7 +8,7 @@ import datetime
 
 # --- CONFIGURATION ---
 INPUT_FILE = "data/baseline/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-data"
-META_FILE = "data/baseline/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-meta"
+META_FILE =  INPUT_FILE.replace('.sigmf-data', '.sigmf-meta')
 OUTPUT_DIR = "data/wavelet_morlet"
 
 DURATION_TO_READ = 600_000      # Largeur temporelle pour la visualisation
