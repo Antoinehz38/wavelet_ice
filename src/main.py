@@ -20,7 +20,7 @@ PARAMS = {
     'detect_kernel': (200, 2)    
 }
 
-def main():
+def main()->None:
     args = parse_args()
     input_file = str(args.input)
     meta_file = str(args.meta)
@@ -47,7 +47,10 @@ def main():
         sig, PARAMS['wavelet'], PARAMS['img_height'], 
         PARAMS['f_min'], PARAMS['f_max'], PARAMS['fs']
     )
-
+    if args.saveRaw:
+        viz.save_spectrogram_image(spec, output_dir, PARAMS)
+        return
+    
     boxes, _ = vision.detect_boxes(
         spec, 
         min_db_range=PARAMS['detect_db_range'], 
@@ -81,9 +84,11 @@ def main():
     else:
         print("Pas de Vérité Terrain disponible pour l'évaluation.")
 
-
+   
 
     viz.save_viz_comparison(spec, meta, boxes, output_dir, PARAMS)
+
+    return None 
 
 if __name__ == "__main__":
     main()

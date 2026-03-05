@@ -50,4 +50,11 @@ def parse_args():
         help="Type of transformation you want in [morlet, fft]"
     )
 
+    parser.add_argument(
+        "--saveRaw",
+        type=bool,
+        default=False,
+        help="Whether to save the raw spectrogram image (without annotations) in the output directory"
+    )
+
     return parser.parse_args()

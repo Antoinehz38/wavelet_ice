@@ -3,6 +3,8 @@ import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib.cm as cm
+import cv2
 from .dsp import freq_to_pixel_linear
 
 def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, params):
@@ -77,4 +79,26 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
     
     plt.savefig(save_path, dpi=150)
     plt.close()
-    print(f"💾 Image sauvegardée : {save_path}")
+    print(f"Image sauvegardée : {save_path}")
+
+def save_spectrogram_image(spectrogram, output_dir, params):
+    """
+    Sauvegarde le spectrogramme en PNG brut classique (image pixel-perfect),
+    sans aucune annotation, axe, titre ou colorbar. Utilise Pillow directement.
+    """
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"spectrogram_{timestamp}.png"
+    save_path = os.path.join(output_dir, filename)
+
+    vm = np.max(spectrogram)
+    # Normalisation entre 0 et 1 avec dynamic range de 40 dB
+    normalized = np.clip((spectrogram - (vm - 40)) / 40, 0, 1)
+
+    # Application de la colormap 'inferno' -> RGBA (uint8)
+    colormap = cm.get_cmap('inferno')
+    rgba = (colormap(normalized) * 255).astype(np.uint8)
+
+    # OpenCV utilise BGR, on prend les 3 canaux RGB et on inverse
+    bgr = cv2.cvtColor(rgba[:, :, :3], cv2.COLOR_RGB2BGR)
+    cv2.imwrite(save_path, bgr)
+    print(f"Spectrogramme brut sauvegardé : {save_path}")
