@@ -87,25 +87,34 @@ def save_spectrogram_image(spectrogram, output_dir, params):
     save_path = os.path.join(output_dir, filename)
 
     vm = np.max(spectrogram)
-
     h, w = spectrogram.shape
 
-    fig = plt.figure(figsize=(16,10))
-    ax = fig.add_axes([0,0,1,1])  # prend toute la figure
+    # 1 pixel = N échantillons (réduction proportionnelle)
+    ds = params.get("downsample_factor", 500)  # ex: 500
+    out_w_px = max(1, int(np.ceil(w / ds)))
+
+    # garder le ratio H/W de ton spectrogramme
+    out_h_px = max(1, int(np.round(out_w_px * (h / w))))
+
+    dpi = params.get("dpi", 150)
+    fig_w_in = out_w_px / dpi
+    fig_h_in = out_h_px / dpi
+
+    fig = plt.figure(figsize=(fig_w_in, fig_h_in), dpi=dpi)
+    ax = fig.add_axes([0, 0, 1, 1])
 
     ax.imshow(
         spectrogram,
         aspect='auto',
         cmap='inferno',
         origin='upper',
-        vmin=vm-40,
+        vmin=vm - 40,
         vmax=vm,
         interpolation='nearest'
     )
-
     ax.axis("off")
 
-    plt.savefig(save_path, dpi=150, bbox_inches='tight', pad_inches=0)
-    plt.close()
+    fig.savefig(save_path, dpi=dpi, bbox_inches=None, pad_inches=0)
+    plt.close(fig)
 
-    print(f"Spectrogramme sauvegardé : {save_path}")
+    print(f"Spectrogramme sauvegardé : {save_path} ({out_w_px}x{out_h_px}px)")
