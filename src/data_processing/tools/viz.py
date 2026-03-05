@@ -89,12 +89,12 @@ def save_spectrogram_image(spectrogram, output_dir, params):
     vm = np.max(spectrogram)
     h, w = spectrogram.shape
 
-    # 1 pixel = N échantillons (réduction proportionnelle)
+    # Temps: 1 pixel = ds échantillons (plus ds est grand, plus c'est compressé)
     ds = params.get("downsample_factor", 500)  # ex: 500
-    out_w_px = max(1, int(np.ceil(w / ds)))
+    out_w_px = int(np.ceil(w / ds))
 
-    # garder le ratio H/W de ton spectrogramme
-    out_h_px = max(1, int(np.round(out_w_px * (h / w))))
+    # Hauteur FIXE (sinon h/w tue l'image)
+    out_h_px = params.get("out_h_px", 1500)    
 
     dpi = params.get("dpi", 150)
     fig_w_in = out_w_px / dpi
@@ -105,15 +105,16 @@ def save_spectrogram_image(spectrogram, output_dir, params):
 
     ax.imshow(
         spectrogram,
-        aspect='auto',
-        cmap='inferno',
-        origin='upper',
+        cmap="inferno",
+        origin="upper",
+        aspect="auto",
         vmin=vm - 40,
         vmax=vm,
-        interpolation='nearest'
+        interpolation="nearest",
     )
     ax.axis("off")
 
+    # IMPORTANT: pas de bbox_inches='tight' sinon matplotlib recadre et casse la taille
     fig.savefig(save_path, dpi=dpi, bbox_inches=None, pad_inches=0)
     plt.close(fig)
 
