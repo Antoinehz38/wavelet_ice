@@ -8,7 +8,7 @@ def generate_linear_scales_rc(f_min, f_max, num_pixels, wavelet: RaisedCosineWav
       scales = (fc * fs) / freqs_linear
     """
     freqs_linear = np.linspace(f_max, f_min, num_pixels)
-    fc = wavelet.central_frequency()
+    fc = wavelet.central_frequency
     scales = (fc * fs) / freqs_linear
     return scales
 
