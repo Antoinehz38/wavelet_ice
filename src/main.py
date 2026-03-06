@@ -75,7 +75,7 @@ def main()->None:
 
     if args.saveRaw:
         viz.save_spectrogram_image(spec, output_dir, PARAMS)
-        return
+        return None
 
     boxes = []
     if args.addPrediction:
