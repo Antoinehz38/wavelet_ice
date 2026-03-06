@@ -3,7 +3,7 @@ import cv2
 
 import matplotlib.pyplot as plt
 
-from src.data_processing.tools.vision import detect_boxes, simple_binary_th, test_detect_boxes
+from src.data_processing.tools.vision import detect_boxes, simple_binary_th
 
 
 def convolve2d(image, kernel):

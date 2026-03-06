@@ -52,25 +52,6 @@ def main()->None:
     meta = loaders.load_metadata(meta_file)
     
     if sig is None: return
-    if PARAMS.get('transform', 'cwt') == 'cwt':
-        spec = dsp.compute_dual_linear_cwt(
-            sig, PARAMS['wavelet'], PARAMS['img_height'],
-            PARAMS['f_min'], PARAMS['f_max'], PARAMS['fs']
-        )
-
-    elif PARAMS['transform'] == 'cwt_rc':
-        rc = RaisedCosineWavelet(
-            fc=PARAMS['rc_fc'],
-            B=PARAMS['rc_B'],
-            beta=PARAMS['rc_beta']
-        )
-        spec = dsp_rc.compute_dual_linear_cwt_rc(
-            sig, rc, PARAMS['img_height'],
-            PARAMS['f_min'], PARAMS['f_max'], PARAMS['fs']
-        )
-    else:
-        raise ValueError("PARAMS['transform'] doit être 'cwt' ou 'cwt_rc'")
-
 
     if PARAMS.get('transform', 'cwt') == 'cwt':
         spec = dsp.compute_dual_linear_cwt(
@@ -90,11 +71,13 @@ def main()->None:
         )
     else:
         raise ValueError("PARAMS['transform'] doit être 'cwt' ou 'cwt_rc'")
+
 
     if args.saveRaw:
         viz.save_spectrogram_image(spec, output_dir, PARAMS)
         return
 
+    boxes = []
     if args.addPrediction:
         boxes, _ = vision.detect_boxes(spec,
                                        min_db_range=PARAMS['detect_db_range'],
@@ -120,11 +103,11 @@ def main()->None:
                     # Format (x, y, w, h)
                     gt_boxes_pixels.append((x, y_start, w, h))
 
-    # --- 3c. Lancement Évaluation ---
-    if len(gt_boxes_pixels) > 0:
-        evaluations.evaluate_coco_style(boxes, gt_boxes_pixels)
-    else:
-        print("Pas de Vérité Terrain disponible pour l'évaluation.")
+        # --- 3c. Lancement Évaluation ---
+        if len(gt_boxes_pixels) > 0:
+            evaluations.evaluate_coco_style(boxes, gt_boxes_pixels)
+        else:
+            print("Pas de Vérité Terrain disponible pour l'évaluation.")
 
 
 
