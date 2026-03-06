@@ -115,6 +115,6 @@ def evaluate_coco_style(pred_boxes, gt_boxes):
         
     avg_f1 = np.mean(f1_scores)
     print("-" * 50)
-    print(f"🏆 SCORE FINAL (mF1 @ .50:.95) : {avg_f1:.4f}\n")
+    print(f"SCORE FINAL (mF1 @ .50:.95) : {avg_f1:.4f}\n")
     
     return avg_f1, results

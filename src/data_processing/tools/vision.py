@@ -45,3 +45,25 @@ def detect_boxes(spectrogram_db, min_db_range=30, morph_kernel_size=(200, 2)):
             detected_boxes.append((x, y, w, h))
             
     return detected_boxes, final_mask
+
+def simple_binary_th(gray_image, min_area=50):
+    _, bw = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+
+    num, lab, stats, _ = cv2.connectedComponentsWithStats(bw, connectivity=8)
+
+    bboxes = []
+    H, W = bw.shape
+    for i in range(1, num):
+        x0, y0, w, h, area = stats[i]
+        if area < min_area:
+            continue
+        # filtres optionnels (souvent utiles)
+        if w < 10 or h < 10:
+            continue
+        if w * h > 0.8 * H * W:
+            continue
+        bboxes.append((x0, y0, w, h))
+
+    return bboxes
+
