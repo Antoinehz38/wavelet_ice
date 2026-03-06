@@ -1,19 +1,22 @@
 import numpy as np
-from dataclasses import dataclass
 
-@dataclass
+
+
 class RaisedCosineWavelet:
-    """
-    Ondelette analytique définie en fréquence (f >= 0).
-    Paramètres:
-      fc   : fréquence centrale (Hz, dans le domaine normalisé si fs=1)
-      B    : largeur de bande utile (Hz)
-      beta : roll-off (0 < beta <= 1)
-    """
-    fc: float
-    B: float
-    beta: float = 0.25
 
+    def __init__(self, fc: float, B: float, beta: float = 0.25):
+        """
+        Ondelette analytique définie en fréquence (f >= 0).
+        Paramètres:
+        fc   : fréquence centrale (Hz, dans le domaine normalisé si fs=1)
+        B    : largeur de bande utile (Hz)
+        beta : roll-off (0 < beta <= 1)
+        """
+        self.fc: float = fc
+        self.B: float = B
+        self.beta: float = beta
+
+    @property
     def central_frequency(self) -> float:
         # Pour notre construction, la fréquence centrale est un paramètre.
         return float(self.fc)
@@ -90,3 +93,8 @@ class RaisedCosineWavelet:
 
         # facteur de normalisation énergie type CWT
         return (np.sqrt(scale) * base).astype(np.complex64)
+    
+
+if __name__ == "__main__":
+    rc = RaisedCosineWavelet(fc=0.1, B=0.05, beta=0.25)
+    print("Central frequency:", rc.central_frequency)
