@@ -46,8 +46,22 @@ def parse_args():
     parser.add_argument(
         "--transfoType",
         type=str,
-        default="morlet",
-        help="Type of transformation you want in [morlet, fft]"
+        default="cwt",
+        help="Type of transformation you want in [cwt, fft, cwt_rc]"
+    )
+
+    parser.add_argument(
+        "--waveletType",
+        type=str,
+        default="cmor100.0-1.0",
+        help="Type of wavelet for CWT (e.g., 'cmor100.0-1.0' or 'fbsp10-0.01-2')"
+    )
+
+    parser.add_argument(
+        "--addPrediction",
+        type=bool,
+        default=False,
+        help="Whether to add prediction to the output (True/False)"
     )
 
     return parser.parse_args()

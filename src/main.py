@@ -12,10 +12,8 @@ PARAMS = {
     'f_max': 0.5,
     'wavelet': "cmor100.0-1.0" , #"cmor100.0-1.0"  'fbsp10-0.01-2'
 
-    #choix du type de transformé 
     'transform': 'cwt',      # cwt_rc ou cwt
 
-  
     'rc_fc': 1.0,            # exemple (dans [0, 0.5] si fs=1)
     'rc_B': 0.12,            # bande utile
     'rc_beta': 0.25,         # roll-off
@@ -23,9 +21,6 @@ PARAMS = {
 
     'detect_db_range': 28, # réglage détection
     
-    # (200, 2) : 
-    # Largeur 200 -> Soude tout ce qui est fragmenté horizontalement (anti-carrés)
-    # Hauteur 2   -> Garde les signaux empilés bien séparés
     'detect_kernel': (200, 2)    
 }
 
@@ -43,6 +38,12 @@ def main():
 
     if args.offset:
         PARAMS['offset'] = args.offset
+
+    if args.transfoType:
+        PARAMS['transform'] = args.transfoType
+    
+    if args.waveletType:
+        PARAMS['wavelet'] = args.waveletType
 
     output_dir = str(args.output)
     loaders.ensure_dir(output_dir)
@@ -71,38 +72,39 @@ def main():
     else:
         raise ValueError("PARAMS['transform'] doit être 'cwt' ou 'cwt_rc'")
 
-    # boxes, _ = vision.detect_boxes(
-    #     spec, 
-    #     min_db_range=PARAMS['detect_db_range'], 
-    #     morph_kernel_size=PARAMS['detect_kernel']
-    # )
-    # print(f"-> {len(boxes)} objets détectés.")
 
+    if args.addPrediction:
+        boxes, _ = vision.detect_boxes(spec, 
+                                        min_db_range=PARAMS['detect_db_range'], 
+                                        morph_kernel_size=PARAMS['detect_kernel']
+                                        )
+        
+        print(f"-> {len(boxes)} objets détectés.")
 
-    # gt_boxes_pixels = []
-    # if meta:
-    #     for ann in meta.get("annotations", []):
-    #         if ann['core:sample_start'] < PARAMS['duration']:
+        gt_boxes_pixels = []
+        if meta:
+            for ann in meta.get("annotations", []):
+                if ann['core:sample_start'] < PARAMS['duration']:
 
-    #             y_start = dsp.freq_to_pixel_linear(ann['core:freq_upper_edge'], PARAMS['img_height'], PARAMS['f_max'])
-    #             y_end = dsp.freq_to_pixel_linear(ann['core:freq_lower_edge'], PARAMS['img_height'], PARAMS['f_max'])
-                
-    #             # Sécuité bornes
-    #             if y_start < 0: y_start = 0
-    #             if y_end > PARAMS['img_height']: y_end = PARAMS['img_height']
-                
-    #             x = ann['core:sample_start']
-    #             w = min(ann['core:sample_count'], PARAMS['duration'] - x)
-    #             h = y_end - y_start
-                
-    #             # Format (x, y, w, h)
-    #             gt_boxes_pixels.append((x, y_start, w, h))
+                    y_start = dsp.freq_to_pixel_linear(ann['core:freq_upper_edge'], PARAMS['img_height'], PARAMS['f_max'])
+                    y_end = dsp.freq_to_pixel_linear(ann['core:freq_lower_edge'], PARAMS['img_height'], PARAMS['f_max'])
+                    
+                    # Sécuité bornes
+                    if y_start < 0: y_start = 0
+                    if y_end > PARAMS['img_height']: y_end = PARAMS['img_height']
+                    
+                    x = ann['core:sample_start']
+                    w = min(ann['core:sample_count'], PARAMS['duration'] - x)
+                    h = y_end - y_start
+                    
+                    # Format (x, y, w, h)
+                    gt_boxes_pixels.append((x, y_start, w, h))
 
-    # # --- 3c. Lancement Évaluation ---
-    # if len(gt_boxes_pixels) > 0:
-    #     evaluations.evaluate_coco_style(boxes, gt_boxes_pixels)
-    # else:
-    #     print("Pas de Vérité Terrain disponible pour l'évaluation.")
+    # --- 3c. Lancement Évaluation ---
+    if len(gt_boxes_pixels) > 0:
+        evaluations.evaluate_coco_style(boxes, gt_boxes_pixels)
+    else:
+        print("Pas de Vérité Terrain disponible pour l'évaluation.")
 
 
     boxes = []
