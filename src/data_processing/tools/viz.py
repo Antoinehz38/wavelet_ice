@@ -11,8 +11,18 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
     """
     Sauvegarde l'image avec axes physiques (Hz) et comparaison BBox.
     """
+
+    if params['transform'] == 'cwt_rc':
+        wavelet_name = "Raised Cosine"
+
+    elif params['transform'] == 'cwt':
+            wavelet_name = params['wavelet']  
+
+    else:
+        wavelet_name = "Wavelet"
+
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"viz_{timestamp}.png"
+    filename = f"{wavelet_name}_{timestamp}.png"
     save_path = os.path.join(output_dir, filename)
     
     h, w = spectrogram.shape
@@ -73,8 +83,10 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
             # Label discret
             plt.text(x+wb, y+hb+10, "Auto", color='#00FF00', fontsize=8, ha='right')
 
-    title_suffix = " (Axe Hz Corrigé)"
-    plt.title(f"Comparaison GT vs Auto - {timestamp} {title_suffix}")
+
+
+    
+    plt.title(f"{wavelet_name} - {timestamp}")
     plt.grid(alpha=0.2, linestyle=':', color='white')
     
     plt.savefig(save_path, dpi=150)
