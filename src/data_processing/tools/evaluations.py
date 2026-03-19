@@ -100,7 +100,7 @@ def evaluate_coco_style(pred_boxes, gt_boxes):
     results = {}
     f1_scores = []
     
-    print(f"\n📊 ÉVALUATION DÉTAILLÉE ({len(pred_boxes)} Preds vs {len(gt_boxes)} GT)")
+    print(f"\n ÉVALUATION DÉTAILLÉE ({len(pred_boxes)} Preds vs {len(gt_boxes)} GT)")
     print(f"{'IoU Thresh':<12} | {'Precision':<10} | {'Recall':<10} | {'F1 Score':<10}")
     print("-" * 50)
     
@@ -115,6 +115,6 @@ def evaluate_coco_style(pred_boxes, gt_boxes):
         
     avg_f1 = np.mean(f1_scores)
     print("-" * 50)
-    print(f"🏆 SCORE FINAL (mF1 @ .50:.95) : {avg_f1:.4f}\n")
+    print(f"SCORE FINAL (mF1 @ .50:.95) : {avg_f1:.4f}\n")
     
     return avg_f1, results

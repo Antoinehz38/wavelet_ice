@@ -20,11 +20,11 @@ PARAMS = {
     
 
     'detect_db_range': 28, # réglage détection
-    
+
     'detect_kernel': (200, 2)    
 }
 
-def main():
+def main()->None:
     args = parse_args()
     input_file = str(args.input)
     meta_file = str(args.meta)
@@ -41,7 +41,7 @@ def main():
 
     if args.transfoType:
         PARAMS['transform'] = args.transfoType
-    
+
     if args.waveletType:
         PARAMS['wavelet'] = args.waveletType
 
@@ -53,9 +53,9 @@ def main():
     
     if sig is None: return
 
-    if PARAMS.get('transform', 'cwt') == 'cwt':   
+    if PARAMS.get('transform', 'cwt') == 'cwt':
         spec = dsp.compute_dual_linear_cwt(
-            sig, PARAMS['wavelet'], PARAMS['img_height'], 
+            sig, PARAMS['wavelet'], PARAMS['img_height'],
             PARAMS['f_min'], PARAMS['f_max'], PARAMS['fs']
         )
 
@@ -73,14 +73,17 @@ def main():
         raise ValueError("PARAMS['transform'] doit être 'cwt' ou 'cwt_rc'")
 
 
-    if args.addPrediction:
-        boxes, _ = vision.detect_boxes(spec, 
-                                        min_db_range=PARAMS['detect_db_range'], 
-                                        morph_kernel_size=PARAMS['detect_kernel']
-                                        )
-        
-        print(f"-> {len(boxes)} objets détectés.")
+    if args.saveRaw:
+        viz.save_spectrogram_image(spec, output_dir, PARAMS)
+        return None
 
+    boxes = []
+    if args.addPrediction:
+        boxes, _ = vision.detect_boxes(spec,
+                                       min_db_range=PARAMS['detect_db_range'],
+                                       morph_kernel_size=PARAMS['detect_kernel']
+                                       )
+        print(f"-> {len(boxes)} objets détectés.")
         gt_boxes_pixels = []
         if meta:
             for ann in meta.get("annotations", []):
@@ -88,27 +91,29 @@ def main():
 
                     y_start = dsp.freq_to_pixel_linear(ann['core:freq_upper_edge'], PARAMS['img_height'], PARAMS['f_max'])
                     y_end = dsp.freq_to_pixel_linear(ann['core:freq_lower_edge'], PARAMS['img_height'], PARAMS['f_max'])
-                    
+
                     # Sécuité bornes
                     if y_start < 0: y_start = 0
                     if y_end > PARAMS['img_height']: y_end = PARAMS['img_height']
-                    
+
                     x = ann['core:sample_start']
                     w = min(ann['core:sample_count'], PARAMS['duration'] - x)
                     h = y_end - y_start
-                    
+
                     # Format (x, y, w, h)
                     gt_boxes_pixels.append((x, y_start, w, h))
 
-    # --- 3c. Lancement Évaluation ---
-    if len(gt_boxes_pixels) > 0:
-        evaluations.evaluate_coco_style(boxes, gt_boxes_pixels)
-    else:
-        print("Pas de Vérité Terrain disponible pour l'évaluation.")
+        # --- 3c. Lancement Évaluation ---
+        if len(gt_boxes_pixels) > 0:
+            evaluations.evaluate_coco_style(boxes, gt_boxes_pixels)
+        else:
+            print("Pas de Vérité Terrain disponible pour l'évaluation.")
 
 
-    boxes = []
+
     viz.save_viz_comparison(spec, meta, boxes, output_dir, PARAMS)
+
+    return None
 
 if __name__ == "__main__":
     main()

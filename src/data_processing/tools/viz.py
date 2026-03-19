@@ -3,6 +3,8 @@ import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib.cm as cm
+import cv2
 from .dsp import freq_to_pixel_linear
 
 def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, params):
@@ -89,4 +91,43 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
     
     plt.savefig(save_path, dpi=150)
     plt.close()
-    print(f"💾 Image sauvegardée : {save_path}")
+    print(f"Image sauvegardée : {save_path}")
+
+def save_spectrogram_image(spectrogram, output_dir, params):
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"spectrogram_{timestamp}.png"
+    save_path = os.path.join(output_dir, filename)
+
+    vm = np.max(spectrogram)
+    h, w = spectrogram.shape
+
+    # Temps: 1 pixel = ds échantillons (plus ds est grand, plus c'est compressé)
+    ds = params.get("downsample_factor", 500)  # ex: 500
+    out_w_px = int(np.ceil(w / ds))
+
+    # Hauteur FIXE (sinon h/w tue l'image)
+    out_h_px = params.get("out_h_px", 1500)    
+
+    dpi = params.get("dpi", 150)
+    fig_w_in = out_w_px / dpi
+    fig_h_in = out_h_px / dpi
+
+    fig = plt.figure(figsize=(fig_w_in, fig_h_in), dpi=dpi)
+    ax = fig.add_axes([0, 0, 1, 1])
+
+    ax.imshow(
+        spectrogram,
+        cmap="inferno",
+        origin="upper",
+        aspect="auto",
+        vmin=vm - 40,
+        vmax=vm,
+        interpolation="nearest",
+    )
+    ax.axis("off")
+
+    # IMPORTANT: pas de bbox_inches='tight' sinon matplotlib recadre et casse la taille
+    fig.savefig(save_path, dpi=dpi, bbox_inches=None, pad_inches=0)
+    plt.close(fig)
+
+    print(f"Spectrogramme sauvegardé : {save_path} ({out_w_px}x{out_h_px}px)")

@@ -64,4 +64,18 @@ def parse_args():
         help="Whether to add prediction to the output (True/False)"
     )
 
+    parser.add_argument(
+        "--saveRaw",
+        type=bool,
+        default=False,
+        help="Whether to save the raw spectrogram image (without annotations) in the output directory"
+    )
+
+    parser.add_argument(
+        "--downSizeFactor",
+        type= int,
+        default = 500,
+        help = "to down size the png picture"
+    )
+
     return parser.parse_args()

@@ -16,7 +16,7 @@ def compute_dual_linear_cwt(iq_data, wavelet_name, total_height, f_min, f_max, f
     Calcule le scalogramme double bande (Positif + Négatif) linéarisé.
     Retourne une matrice (total_height, time) en dB.
     """
-    print(f"⏳ Calcul CWT Linéaire ({total_height} px)...")
+    print(f"Calcul CWT Linéaire ({total_height} px)...")
     
     # On divise l'image en deux : moitié haute (Pos), moitié basse (Neg)
     nb_rows_per_band = total_height // 2
