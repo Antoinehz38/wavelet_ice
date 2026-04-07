@@ -37,7 +37,7 @@ def normalize_uint8(img):
 
 if __name__ == "__main__":
 
-    input = "/home/antoine/Downloads/spectrogram_20260306_083825.png"
+    input = "data/metrics/spectrogram_20260305_103527.png"
     output = input.replace(".png", "_predict.png")
     image_gray = cv2.imread(input, cv2.IMREAD_GRAYSCALE)
     image = cv2.imread(input, cv2.IMREAD_COLOR)

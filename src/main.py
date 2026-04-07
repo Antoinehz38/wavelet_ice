@@ -1,5 +1,6 @@
 from src.helpers.parser import parse_args
 from src.data_processing.tools import evaluations, dsp, loaders, viz, vision, dsp_rc
+from src.data_processing.tools.test import detect_signals_by_projections, tighten_box_2d,  tighten_box_with_energy
 from src.data_processing.tools.raised_cosine import RaisedCosineWavelet
 
 
@@ -21,7 +22,8 @@ PARAMS = {
 
     'detect_db_range': 28, # réglage détection
 
-    'detect_kernel': (200, 2)    
+    'detect_kernel': (200, 2), 
+    'downsample_factor': 500,
 }
 
 def main()->None:
@@ -44,6 +46,9 @@ def main()->None:
 
     if args.waveletType:
         PARAMS['wavelet'] = args.waveletType
+    
+    if args.downSizeFactor:
+        PARAMS['downsample_factor'] = args.downSizeFactor
 
     output_dir = str(args.output)
     loaders.ensure_dir(output_dir)
@@ -79,10 +84,15 @@ def main()->None:
 
     boxes = []
     if args.addPrediction:
-        boxes, _ = vision.detect_boxes(spec,
-                                       min_db_range=PARAMS['detect_db_range'],
-                                       morph_kernel_size=PARAMS['detect_kernel']
-                                       )
+       
+        boxes, z = detect_signals_by_projections(spec)
+        boxes = [
+            tighten_box_2d(
+                z,
+                box,
+            )
+            for box in boxes
+            ]
         print(f"-> {len(boxes)} objets détectés.")
         gt_boxes_pixels = []
         if meta:
