@@ -84,6 +84,7 @@ def main()->None:
 
     boxes = []
     if args.addPrediction:
+        print("adding prediction ... ")
        
         boxes, z = detect_signals_by_projections(spec)
         boxes = [
