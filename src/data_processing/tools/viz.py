@@ -1,11 +1,26 @@
 import os
 import datetime
+import re
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.cm as cm
 import cv2
 from .dsp import freq_to_pixel_linear
+
+
+def _resolve_wavelet_output_dir(output_dir, params):
+    if params.get('transform') != 'cwt':
+        return output_dir
+
+    wavelet_name = params.get('wavelet', '')
+    match = re.match(r"[A-Za-z]+", wavelet_name)
+    if not match:
+        return output_dir
+
+    wavelet_dir = os.path.join(output_dir, match.group(0))
+    os.makedirs(wavelet_dir, exist_ok=True)
+    return wavelet_dir
 
 def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, params):
     """
@@ -24,7 +39,8 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{wavelet_name}_{timestamp}.png"
-    save_path = os.path.join(output_dir, filename)
+    target_output_dir = _resolve_wavelet_output_dir(output_dir, params)
+    save_path = os.path.join(target_output_dir, filename)
     
     h, w = spectrogram.shape
     f_max = params['f_max']
@@ -106,8 +122,10 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
 
 def save_spectrogram_image(spectrogram, output_dir, params):
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"spectrogram_{timestamp}.png"
-    save_path = os.path.join(output_dir, filename)
+    wavelet_name = params.get('wavelet', 'spectrogram')
+    filename = f"{wavelet_name}_{timestamp}.png"
+    target_output_dir = _resolve_wavelet_output_dir(output_dir, params)
+    save_path = os.path.join(target_output_dir, filename)
 
     vm = np.max(spectrogram)
     h, w = spectrogram.shape
