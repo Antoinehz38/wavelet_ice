@@ -44,6 +44,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
         return None
 
     boxes = []
+    gt_boxes_pixels = []
     if params.get('addPrediction', False):
         print("adding prediction ... ")
        

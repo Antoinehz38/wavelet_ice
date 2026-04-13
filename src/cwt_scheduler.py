@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
-from data_processing.tools import loaders
+from src.data_processing.tools import loaders
 
 
 @dataclass

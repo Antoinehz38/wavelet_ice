@@ -1,8 +1,6 @@
 import os
-import cv2
-import datetime
 
-from src.cwt_scheduler import build_cwt_windows_from_annotations
+from src.cwt_scheduler import build_cwt_windows_from_annotations, TimeWindow
 from src.helpers.parser import parse_args
 from src.data_processing.tools import evaluations, dsp, loaders, viz, vision, dsp_rc
 from src.data_processing.tools.raised_cosine import RaisedCosineWavelet
@@ -77,6 +75,7 @@ def main()->None:
             if file.endswith(".sigmf-data"):
                 input_file = os.path.join(input_folder, file)
                 meta= loaders.load_metadata(input_file.replace(".sigmf-data", ".sigmf-meta"))
+                annotations = meta.get("annotations", []) if meta else []
                 windows = build_cwt_windows_from_annotations(
                             annotations=annotations,
                             points_per_window=PARAMS['points_per_window'],
@@ -95,21 +94,31 @@ def main()->None:
 
     meta = loaders.load_metadata(meta_file)
 
-    annotations = meta.get("annotations", []) if meta else []
-    windows = build_cwt_windows_from_annotations(
-        annotations=annotations,
-        points_per_window=PARAMS['points_per_window'],
-        global_start=PARAMS['offset'],
-        global_end=PARAMS['offset'] + PARAMS['duration'],
-    )
-    print(f"{len(windows)} fenêtres CWT à calculer.")
-    for i, w in enumerate(windows):
-        print(
-            f"[{i}] start={w.start}, end={w.end}, len={w.length}, "
-            f"active={w.descriptions}")
+    # annotations = meta.get("annotations", []) if meta else []
+    # windows = build_cwt_windows_from_annotations(
+    #     annotations=annotations,
+    #     points_per_window=PARAMS['points_per_window'],
+    #     global_start=PARAMS['offset'],
+    #     global_end=PARAMS['offset'] + PARAMS['duration'],
+    # )
+    # print(f"{len(windows)} fenêtres CWT à calculer.")
+    # for i, w in enumerate(windows):
+    #     print(
+    #         f"[{i}] start={w.start}, end={w.end}, len={w.length}, "
+    #         f"active={w.descriptions}")
         
-        run_signal_processing_pipeline(input_file, meta, output_dir, 
-                                       time_window=w, params=PARAMS)
+    #     run_signal_processing_pipeline(input_file, meta, output_dir, 
+    #                                    time_window=w, params=PARAMS)
+
+    time_window = TimeWindow(
+        start=PARAMS['offset'],
+        end=PARAMS['offset'] + PARAMS['duration'],
+        length=PARAMS['duration'],
+        active_annotations=[],
+        descriptions=[],
+    )
+    run_signal_processing_pipeline(input_file, meta, output_dir, 
+                                    time_window=time_window, params=PARAMS)
 if __name__ == "__main__":
     main()
 
