@@ -1,5 +1,6 @@
 import cv2
-from src.data_processing.tools.test import moyenne_temporelle_spectrogramme, creer_et_appliquer_passe_bas, detecter_signaux_toutes_fenetres, affiner_bordures_temporelles, fusionner_detections_precises
+from src.data_processing.tools.test import moyenne_temporelle_spectrogramme, creer_et_appliquer_passe_bas 
+from src.data_processing.tools.test import sauvegarder_visualisation_avec_boxes, detecter_signaux_robustes, affiner_bordures_temporelles, fusionner_detections_precises
                                             
 import numpy as np
 
@@ -14,7 +15,8 @@ def detect_box(image, delta_t=100, intensite_lissage=0.015, seuil_detection=25, 
         axe=0
     )
 
-    detections_list = detecter_signaux_toutes_fenetres(spectrogramme_lisse, seuil=seuil_detection)
+    #detections_list = detecter_signaux_toutes_fenetres(spectrogramme_lisse, seuil=seuil_detection)
+    detections_list = detecter_signaux_robustes(spectrogramme_lisse, proeminence_min=10)
 
     detection_affinees = affiner_bordures_temporelles(image, detections_list, delta_t, seuil_t=seuil_affinage, lissage_t=lissage_affinage)
     
@@ -23,11 +25,21 @@ def detect_box(image, delta_t=100, intensite_lissage=0.015, seuil_detection=25, 
 
     return boxes
 if __name__ == "__main__":
-    file_path = "data/metrics/spectrogram_20260305_103527.png"
+    file_path = "data/test_detection/spectrogram_20260413_150146.png"
     img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
 
 
     boxes = detect_box(img)
+
+    sauvegarder_visualisation_avec_boxes(
+        image=img,
+        spectrogramme_moyen=moyenne_temporelle_spectrogramme(img, delta_t=100),
+        delta_t=100,
+        i=25,
+        boxes=boxes,
+        chemin_sortie="data/metrics/visu.png"
+    )
+
     print("Boxes détectées :", boxes)
     out = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     for x, y, w, h in boxes:

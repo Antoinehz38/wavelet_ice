@@ -78,4 +78,11 @@ def parse_args():
         help = "to down size the png picture"
     )
 
+    parser.add_argument(
+        "--pointsPerWindow",
+        type= int,
+        default = 100_000,
+        help = "number of points per window for CWT calculation"
+    )
+
     return parser.parse_args()
