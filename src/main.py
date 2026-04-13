@@ -1,18 +1,22 @@
 from src.helpers.parser import parse_args
 from src.data_processing.tools import evaluations, dsp, loaders, viz, vision, dsp_rc
 from src.data_processing.tools.raised_cosine import RaisedCosineWavelet
-
+import numpy as np
 
 PARAMS = {
-    'offset': 0,
-    'duration': 20_000,
-    'fs': 1.0,
+    'offset': 606028,  # askip offset n’est pas en échantillons, il est en octets. (C’est à cause de loaders.py (line 9)). Dans numpy.fromfile, offset est un décalage en bytes. Or un échantillon complex64 vaut 8 octets. Donc :  offset_bytes = sample_start * 8
+    # Autre point important : avec offset != 0, les annotations sont mal recalées dans main.py (line 89) et viz.py (line 56), parce que le code utilise encore ann['core:sample_start'] sans soustraire l’offset local. 
+    # Donc : le signal affiché sera le bon ;
+    # mais les boîtes GT risquent d’être absentes ou au mauvais endroit.
+
+    'duration': 2_000_000,
+    'fs': 1.0, # fréquence d'échantillonnage - nb d'echantillons par seconde (pour la conversion temps <-> échantillons) fs = 1.0 : on est en unités normalisées, pas en secondes physiques utiles. La conversion est : temps (s) = nombre_d'échantillons
     'img_height': 512,
     'f_min': 0.005,
     'f_max': 0.5,
     'wavelet': "cmor100.0-1.0" , #"cmor100.0-1.0"  'fbsp10-0.01-2'
 
-    'transform': 'cwt',      # cwt_rc ou cwt
+    'transform': 'cwt_rc',      # cwt_rc ou cwt
 
     'rc_fc': 1.0,            # exemple (dans [0, 0.5] si fs=1)
     'rc_B': 0.12,            # bande utile
@@ -33,10 +37,10 @@ def main()->None:
         meta_file = input_file.replace(".sigmf-data", ".sigmf-meta")
         print(f'meta_file = {meta_file}')
 
-    if args.duration:
+    if args.duration is not None:
         PARAMS['duration'] = args.duration
 
-    if args.offset:
+    if args.offset is not None:
         PARAMS['offset'] = args.offset
 
     if args.transfoType:
@@ -48,7 +52,9 @@ def main()->None:
     output_dir = str(args.output)
     loaders.ensure_dir(output_dir)
 
-    sig = loaders.load_iq_data(input_file, PARAMS['duration'], offset=PARAMS['offset'])
+    bytes_per_sample = np.dtype(np.complex64).itemsize
+    load_offset_bytes = PARAMS['offset'] * bytes_per_sample
+    sig = loaders.load_iq_data(input_file, PARAMS['duration'], offset=load_offset_bytes)
     meta = loaders.load_metadata(meta_file)
     
     if sig is None: return
@@ -87,21 +93,22 @@ def main()->None:
         gt_boxes_pixels = []
         if meta:
             for ann in meta.get("annotations", []):
-                if ann['core:sample_start'] < PARAMS['duration']:
+                x = ann['core:sample_start'] - PARAMS['offset']
+                if x < 0 or x >= PARAMS['duration']: 
+                    continue  # Cette annotation est en dehors de la plage chargée, on l'ignore
+                y_start = dsp.freq_to_pixel_linear(ann['core:freq_upper_edge'], PARAMS['img_height'], PARAMS['f_max'])
+                y_end = dsp.freq_to_pixel_linear(ann['core:freq_lower_edge'], PARAMS['img_height'], PARAMS['f_max'])
 
-                    y_start = dsp.freq_to_pixel_linear(ann['core:freq_upper_edge'], PARAMS['img_height'], PARAMS['f_max'])
-                    y_end = dsp.freq_to_pixel_linear(ann['core:freq_lower_edge'], PARAMS['img_height'], PARAMS['f_max'])
+                # Sécuité bornes
+                if y_start < 0: y_start = 0
+                if y_end > PARAMS['img_height']: y_end = PARAMS['img_height']
 
-                    # Sécuité bornes
-                    if y_start < 0: y_start = 0
-                    if y_end > PARAMS['img_height']: y_end = PARAMS['img_height']
+                x = ann['core:sample_start']
+                w = min(ann['core:sample_count'], PARAMS['duration'] - x)
+                h = y_end - y_start
 
-                    x = ann['core:sample_start']
-                    w = min(ann['core:sample_count'], PARAMS['duration'] - x)
-                    h = y_end - y_start
-
-                    # Format (x, y, w, h)
-                    gt_boxes_pixels.append((x, y_start, w, h))
+                # Format (x, y, w, h)
+                gt_boxes_pixels.append((x, y_start, w, h))
 
         # --- 3c. Lancement Évaluation ---
         if len(gt_boxes_pixels) > 0:

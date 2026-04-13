@@ -20,6 +20,7 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
 
     else:
         wavelet_name = "Wavelet"
+    offset = params.get('offset', 0)
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{wavelet_name}_{timestamp}.png"
@@ -55,24 +56,34 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
     # --- 1. Dessin Vérité Terrain (Cyan) ---
     if meta_data:
         for ann in meta_data.get("annotations", []):
-            if ann['core:sample_start'] < duration:
-                # Conversion Hz -> Pixels
-                y_start = freq_to_pixel_linear(ann['core:freq_upper_edge'], h, f_max)
-                y_end = freq_to_pixel_linear(ann['core:freq_lower_edge'], h, f_max)
-                
-                # Vérification pour éviter les crashs si hors image
-                if y_start < 0: y_start = 0
-                if y_end > h: y_end = h
+            x_start = ann['core:sample_start'] - offset
+            if x_start < 0 or x_start >= duration:
+                continue
 
-                rect = patches.Rectangle(
-                    (ann['core:sample_start'], y_start),
-                    min(ann['core:sample_count'], duration - ann['core:sample_start']),
-                    y_end - y_start,
-                    linewidth=2, edgecolor='cyan', facecolor='none'
-                )
-                ax.add_patch(rect)
-                plt.text(ann['core:sample_start'], y_start-5, ann.get('core:description',''), 
-                         color='cyan', fontsize=9, fontweight='bold')
+            y_start = freq_to_pixel_linear(ann['core:freq_upper_edge'], h, f_max)
+            y_end = freq_to_pixel_linear(ann['core:freq_lower_edge'], h, f_max)
+
+            if y_start < 0:
+                y_start = 0
+            if y_end > h:
+                y_end = h
+
+            rect = patches.Rectangle(
+                (x_start, y_start),
+                min(ann['core:sample_count'], duration - x_start),
+                y_end - y_start,
+                linewidth=2, edgecolor='cyan', facecolor='none'
+            )
+            ax.add_patch(rect)
+            plt.text(
+                x_start,
+                y_start - 5,
+                ann.get('core:description', ''),
+                color='cyan',
+                fontsize=9,
+                fontweight='bold'
+            )
+
 
     # --- 2. Dessin Détection Auto (Vert) ---
     if detected_boxes:
