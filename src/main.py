@@ -1,5 +1,6 @@
 import os
 import cv2
+import datetime
 from src.helpers.parser import parse_args
 from src.data_processing.tools import evaluations, dsp, loaders, viz, vision, dsp_rc
 from src.data_processing.tools.test import detect_signals_by_projections, tighten_box_2d,  tighten_box_with_energy
@@ -80,12 +81,14 @@ def main()->None:
         raise ValueError("PARAMS['transform'] doit être 'cwt' ou 'cwt_rc'")
 
 
-
-    if args.saveRaw:
-        viz.save_spectrogram_image(spec, output_dir, PARAMS)
-        return None
     
     compressed_spec = viz.compress_spectrogram(spec, PARAMS['downsample_factor'])
+
+    if args.saveRaw:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"spectrogram_{timestamp}.png"
+        cv2.imwrite(os.path.join(output_dir, filename), compressed_spec)
+        return None
 
     boxes = []
     if args.addPrediction:
