@@ -14,7 +14,7 @@ PARAMS = {
     'duration': 20_000,
     'fs': 1.0,
     'img_height': 512,
-    'points_per_window': 100_000,
+    'points_per_window': 1_000_000,
     'f_min': 0.005,
     'f_max': 0.5,
     'wavelet': "cmor100.0-1.0" , #"cmor100.0-1.0"  'fbsp10-0.01-2'
@@ -65,6 +65,9 @@ def main()->None:
 
     if args.addPrediction:
         PARAMS['addPrediction'] = True
+    
+    if args.pointsPerWindow:
+        PARAMS['points_per_window'] = args.pointsPerWindow
     
     if args.runPipelineOnFolder:
         input_folder = str(args.runPipelineOnFolder)
