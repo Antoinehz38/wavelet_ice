@@ -5,6 +5,8 @@ import matplotlib.patches as patches
 from scipy.ndimage import label, find_objects
 from scipy.signal import butter, filtfilt, find_peaks
 
+from src.data_processing.tools import evaluations, dsp, loaders, viz, dsp_rc
+
 
 
 def draw_boxes(gray, boxes):
@@ -66,9 +68,10 @@ def sauvegarder_visualisation_fenetre(image, spectrogramme_moyen, delta_t, i, ch
     plt.close()
 
 
-def sauvegarder_visualisation_avec_boxes(image, spectrogramme_moyen, delta_t, i, boxes, chemin_sortie):
+def sauvegarder_visualisation_avec_boxes(image, spectrogramme_moyen, delta_t, i, boxes, chemin_sortie, gt_boxes_pixels=None):
     """
-    Génère la visualisation d'une fenêtre avec les délimitations des boîtes détectées.
+    Génère la visualisation d'une fenêtre avec les délimitations des boîtes détectées
+    et les ground truth boxes (gt_boxes_pixels) en cyan.
     """
     F = image.shape[0]
     n_fenetres = spectrogramme_moyen.shape[1]
@@ -129,6 +132,27 @@ def sauvegarder_visualisation_avec_boxes(image, spectrogramme_moyen, delta_t, i,
             box_rect = patches.Rectangle((bx0, by0), w, h, 
                                          linewidth=1, edgecolor='lime', facecolor='none')
             axes[0].add_patch(box_rect)
+
+    # --- AJOUT DES LIGNES CYAN BASÉES SUR LES GT BOXES ---
+    if gt_boxes_pixels is not None:
+        for (bx0, by0, w, h) in gt_boxes_pixels:
+            bx1 = bx0 + w
+            by1 = by0 + h
+            
+            # On vérifie si la boîte GT traverse notre fenêtre temporelle actuelle
+            if bx0 < t_fin_fenetre and bx1 > t_debut_fenetre:
+                
+                # Dessin des traits cyan pour la fréquence min (by0) et max (by1)
+                axes[1].axvline(x=by0, color='cyan', linestyle='--', linewidth=2, zorder=2)
+                axes[1].axvline(x=by1, color='cyan', linestyle='--', linewidth=2, zorder=2)
+                
+                # Zone du signal GT en cyan
+                axes[1].axvspan(by0, by1, color='cyan', alpha=0.10, zorder=1)
+                
+                # Dessiner les GT boxes sur l'image de gauche en cyan
+                gt_rect = patches.Rectangle((bx0, by0), w, h, 
+                                             linewidth=1.5, edgecolor='cyan', facecolor='none', linestyle='--')
+                axes[0].add_patch(gt_rect)
 
     plt.tight_layout()
     plt.savefig(chemin_sortie, dpi=150)
@@ -406,6 +430,34 @@ def affiner_bordures_temporelles(image_originale, liste_detections, delta_t, seu
         
     return detections_affinees
 
+
+params = {
+    'offset': 0,
+    'duration': 2_000_000,
+    'fs': 1.0,
+    'img_height': 512,
+    'points_per_window': 1_000_000,
+    'f_min': 0.005,
+    'f_max': 0.5,
+    'wavelet': "cmor100.0-1.0" , #"cmor100.0-1.0"  'fbsp10-0.01-2'
+
+    'transform': 'cwt',      # cwt_rc ou cwt
+
+    'rc_fc': 1.0,            # exemple (dans [0, 0.5] si fs=1)
+    'rc_B': 0.12,            # bande utile
+    'rc_beta': 0.25,         # roll-off
+    
+
+    'detect_db_range': 28, # réglage détection
+
+    'detect_kernel': (200, 2), 
+    'downsample_factor': 500,
+
+    'saveRaw': False,
+
+    'addPrediction': False,
+}
+
 if __name__ == "__main__":
     file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/baseline/debug.png"
     compressed_spec = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
@@ -431,9 +483,40 @@ if __name__ == "__main__":
         i=i,
         chemin_sortie=f"/home/antoine/Documents/ICE/projet/wavelet_ice/data/test_detection/{filename}_fenetre_{delta_t}_{i}_lisse_{intensite_lissage}.png"
     )  
+    gt_boxes_pixels = []
+
+    img_h = compressed_spec.shape[0]  # out_h_px (1500 par défaut)
+    ds = 500
+    scale_y = img_h / params['img_height']
+
+    meta = loaders.load_metadata("/home/antoine/Documents/ICE/projet/wavelet_ice/data/baseline/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-meta")
+
+    gt_boxes_pixels = []
+    if meta:
+        for ann in meta.get("annotations", []):
+            if ann['core:sample_start'] < 2_000_000:  
+
+                y_start = dsp.freq_to_pixel_linear(ann['core:freq_upper_edge'], params['img_height'], params['f_max'])
+                y_end = dsp.freq_to_pixel_linear(ann['core:freq_lower_edge'], params['img_height'], params['f_max'])
+
+                # Sécurité bornes (dans le repère original)
+                if y_start < 0: y_start = 0
+                if y_end > params['img_height']: y_end = params['img_height']
+
+                x = ann['core:sample_start']
+                w = min(ann['core:sample_count'], params['duration'] - x)
+                h = y_end - y_start
+
+                # Conversion vers le repère de l'image compressée
+                cx = x / ds
+                cw = w / ds
+                cy = y_start * scale_y
+                ch = h * scale_y
+
+                gt_boxes_pixels.append((cx, cy, cw, ch))
 
     
-    roll_off_threshold = 0.50
+    roll_off_threshold = 0.30
     detections_list = detecter_signaux_robustes(spectrogramme_lisse, seuil_rolloff=roll_off_threshold)
 
     detection_affinees = affiner_bordures_temporelles(compressed_spec, detections_list, delta_t, seuil_t=20, lissage_t=0.1)
@@ -442,6 +525,7 @@ if __name__ == "__main__":
     boxes = fusionner_detections_precises(detection_affinees, delta_t)
 
     sauvegarder_visualisation_avec_boxes(boxes=boxes,
+                                        gt_boxes_pixels=gt_boxes_pixels,
                                         image=compressed_spec,
                                         spectrogramme_moyen=spectrogramme_lisse,
                                         delta_t=delta_t,
