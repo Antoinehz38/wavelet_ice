@@ -167,10 +167,12 @@ def detecter_signaux_toutes_fenetres(spectrogramme_lisse, seuil=25):
     return liste_detections
 
 
-import numpy as np
-from scipy.signal import find_peaks
-
-def detecter_signaux_robustes(spectrogramme_lisse, proeminence_min=5, largeur_min=5, distance_min=10, ratio_intensite_max=1.5, seuil_rolloff=0.90):
+def detecter_signaux_robustes(spectrogramme_lisse, 
+                              proeminence_min=5, 
+                              largeur_min=5, 
+                              distance_min=10, 
+                              ratio_intensite_max=1.5, 
+                              seuil_rolloff=0.90):
     """
     Détecte les signaux, gère les fusions/séparations complexes, et 
     rogne les bords (roll-off) pour des boîtes parfaitement ajustées à l'énergie.
@@ -405,7 +407,7 @@ def affiner_bordures_temporelles(image_originale, liste_detections, delta_t, seu
     return detections_affinees
 
 if __name__ == "__main__":
-    file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/test_detection/spectrogram_20260413_145226.png"
+    file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/baseline/debug.png"
     compressed_spec = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
     filename = file_path.split("/")[-1].replace(".png", "")
     spectrogramme_moyen = moyenne_temporelle_spectrogramme(compressed_spec, delta_t=100)
@@ -430,12 +432,22 @@ if __name__ == "__main__":
         chemin_sortie=f"/home/antoine/Documents/ICE/projet/wavelet_ice/data/test_detection/{filename}_fenetre_{delta_t}_{i}_lisse_{intensite_lissage}.png"
     )  
 
-    detections_list = detecter_signaux_toutes_fenetres(spectrogramme_lisse, seuil=25)
+    
+    roll_off_threshold = 0.50
+    detections_list = detecter_signaux_robustes(spectrogramme_lisse, seuil_rolloff=roll_off_threshold)
 
     detection_affinees = affiner_bordures_temporelles(compressed_spec, detections_list, delta_t, seuil_t=20, lissage_t=0.1)
     
 
     boxes = fusionner_detections_precises(detection_affinees, delta_t)
+
+    sauvegarder_visualisation_avec_boxes(boxes=boxes,
+                                        image=compressed_spec,
+                                        spectrogramme_moyen=spectrogramme_lisse,
+                                        delta_t=delta_t,
+                                        i=i,
+                                        chemin_sortie=f"/home/antoine/Documents/ICE/projet/wavelet_ice/data/test_detection/{filename}_fenetre_with_boxes_roth_{roll_off_threshold}.png"
+                                        )
 
     out = draw_boxes(compressed_spec, boxes)
     cv2.imwrite(f"/home/antoine/Documents/ICE/projet/wavelet_ice/data/test_detection/{filename}_detections_fusionnees.png", out)

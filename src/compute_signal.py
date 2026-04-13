@@ -48,7 +48,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
     if params.get('addPrediction', False):
         print("adding prediction ... ")
        
-        boxes = vision.detect_box(compressed_spec, delta_t=100, intensite_lissage=0.015)
+        boxes = vision.detect_box(compressed_spec, delta_t=100, intensite_lissage=0.015, roll_off_threshold=0.30)
         print(f"-> {len(boxes)} objets détectés.")
 
         # Facteurs de conversion spectrogramme original -> image compressée
@@ -95,7 +95,8 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
         wavelet_name = "Wavelet"
     
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{wavelet_name}_start_{time_window.start}_length_{time_window.length}.png"
+    input_name = os.path.basename(input_file).replace(".sigmf-data", "")
+    filename = f"{input_name}_{wavelet_name}_start_{time_window.start}_length_{time_window.length}.png"
     filepath = os.path.join(output_dir, filename)
 
     save_viz_comparison(compressed_spec, gt_boxes_pixels, boxes, filepath, params)

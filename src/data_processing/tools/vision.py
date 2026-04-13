@@ -5,7 +5,12 @@ from src.data_processing.tools.detection_helpers import sauvegarder_visualisatio
 import numpy as np
 
 
-def detect_box(image, delta_t=100, intensite_lissage=0.015, seuil_detection=25, seuil_affinage=20, lissage_affinage=0.1):
+def detect_box(image, delta_t=100, 
+               intensite_lissage=0.015, 
+               seuil_detection=25, 
+               seuil_affinage=20, 
+               lissage_affinage=0.1,
+               roll_off_threshold=0.10):
     F, T = image.shape
     delta_t = min(delta_t, T//10)
     spectrogramme_moyen = moyenne_temporelle_spectrogramme(image, delta_t=delta_t)
@@ -17,7 +22,7 @@ def detect_box(image, delta_t=100, intensite_lissage=0.015, seuil_detection=25, 
         axe=0
     )
 
-    detections_list = detecter_signaux_robustes(spectrogramme_lisse, proeminence_min=10)
+    detections_list = detecter_signaux_robustes(spectrogramme_lisse, proeminence_min=10, seuil_rolloff=roll_off_threshold)
 
     detection_affinees = affiner_bordures_temporelles(image, detections_list, delta_t, seuil_t=seuil_affinage, lissage_t=lissage_affinage)
     
