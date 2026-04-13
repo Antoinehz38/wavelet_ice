@@ -55,8 +55,11 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
         print(f"-> {len(boxes)} objets détectés.")
 
         # Facteurs de conversion spectrogramme original -> image compressée
-        img_h = compressed_spec.shape[0]  # out_h_px (1500 par défaut)
-        ds = params['downsample_factor']
+        img_h, img_w = compressed_spec.shape[:2]
+        win_len = time_window.length  # nombre d'échantillons dans la fenêtre
+
+        # Ratios : échantillons/pixels → pixels compressés
+        scale_x = img_w / win_len
         scale_y = img_h / params['img_height']
 
         gt_boxes_pixels = []
@@ -83,8 +86,8 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
                 h = y_end - y_start
 
                 # Conversion vers le repère de l'image compressée
-                cx = x_rel / ds
-                cw = w / ds
+                cx = x_rel * scale_x
+                cw = w * scale_x
                 cy = y_start * scale_y
                 ch = h * scale_y
 
