@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
+from data_processing.tools import loaders
+
 
 @dataclass
 class TimeWindow:
@@ -186,15 +188,36 @@ def build_cwt_windows_from_annotations(
         segments=segments,
         points_per_window=points_per_window,
     )
-    return windows
+    cleaned_windows = []
+    for w in windows:
+        for cw in cleaned_windows:
+            if cw.descriptions == w.descriptions:
+                break
+        else:
+            cleaned_windows.append(w)
+    return cleaned_windows
 
 
 if __name__ == "__main__":
+    meta_file = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/baseline/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-meta"
+    meta = loaders.load_metadata(meta_file)
     annotations = meta.get("annotations", []) if meta else []
 
+
+    PARAMS = {
+        'points_per_window': 1_000_000,
+        'offset': 0,
+        'duration': 100_000_000,
+    }
     windows = build_cwt_windows_from_annotations(
         annotations=annotations,
         points_per_window=PARAMS['points_per_window'],
         global_start=PARAMS['offset'],
         global_end=PARAMS['offset'] + PARAMS['duration'],
     )
+    print(f"{len(windows)} fenêtres CWT à calculer.")
+    for i, w in enumerate(windows):
+        print(
+            f"[{i}] start={w.start}, end={w.end}, len={w.length}, "
+            f"active={w.descriptions}"
+        )

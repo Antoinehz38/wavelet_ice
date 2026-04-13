@@ -7,15 +7,19 @@ import matplotlib.cm as cm
 import cv2
 from .dsp import freq_to_pixel_linear
 
-def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, params):
+def save_viz_comparison(spectrogram, gt_boxes_pixels, detected_boxes, filepath, params):
     """
     Sauvegarde l'image compressée (uint8 grayscale) avec axes physiques (Hz / échantillons)
     et comparaison BBox ground-truth (cyan) vs détection auto (vert).
 
-    spectrogram : np.ndarray uint8, image compressée (out_h_px, out_w_px)
-    detected_boxes : liste de (x, y, w, h) dans le repère compressé
+    Args:
+        spectrogram: np.ndarray uint8, image compressée (out_h_px, out_w_px)
+        gt_boxes_pixels: liste de (x, y, w, h) ground truth dans le repère compressé
+        detected_boxes: liste de (x, y, w, h) détections dans le repère compressé
+        filepath: str, chemin de sauvegarde complet
+        params: dict, paramètres contenant f_max, downsample_factor, etc.
     """
-
+    
     if params['transform'] == 'cwt_rc':
         wavelet_name = "Raised Cosine"
     elif params['transform'] == 'cwt':
@@ -23,16 +27,9 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
     else:
         wavelet_name = "Wavelet"
 
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{wavelet_name}_{timestamp}.png"
-    save_path = os.path.join(output_dir, filename)
-
     h, w = spectrogram.shape
     f_max = params['f_max']
-    duration = params['duration']
     ds = params['downsample_factor']
-    img_height_orig = params['img_height']
-    scale_y = h / img_height_orig
 
     plt.figure(figsize=(16, 10))
 
@@ -56,33 +53,15 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
     plt.xticks(xticks_pixels, labels_x)
     plt.xlabel("Temps (Échantillons)")
 
-    # --- 1. Dessin Vérité Terrain (Cyan) — converti vers repère compressé ---
-    if meta_data:
-        for ann in meta_data.get("annotations", []):
-            if ann['core:sample_start'] < duration:
-                # Conversion Hz -> pixels dans le repère original
-                y_start = freq_to_pixel_linear(ann['core:freq_upper_edge'], img_height_orig, f_max)
-                y_end = freq_to_pixel_linear(ann['core:freq_lower_edge'], img_height_orig, f_max)
-
-                if y_start < 0: y_start = 0
-                if y_end > img_height_orig: y_end = img_height_orig
-
-                x_orig = ann['core:sample_start']
-                w_orig = min(ann['core:sample_count'], duration - x_orig)
-
-                # Conversion vers le repère compressé
-                cx = x_orig / ds
-                cw = w_orig / ds
-                cy = y_start * scale_y
-                ch = (y_end - y_start) * scale_y
-
-                rect = patches.Rectangle(
-                    (cx, cy), cw, ch,
-                    linewidth=2, edgecolor='cyan', facecolor='none'
-                )
-                ax.add_patch(rect)
-                plt.text(cx, cy - 5, ann.get('core:description', ''),
-                         color='cyan', fontsize=9, fontweight='bold')
+    # --- 1. Dessin Vérité Terrain (Cyan) - déjà converti vers repère compressé ---
+    if gt_boxes_pixels:
+        for (cx, cy, cw, ch) in gt_boxes_pixels:
+            rect = patches.Rectangle(
+                (cx, cy), cw, ch,
+                linewidth=2, edgecolor='cyan', facecolor='none'
+            )
+            ax.add_patch(rect)
+            plt.text(cx, cy - 5, "GT", color='cyan', fontsize=9, fontweight='bold')
 
     # --- 2. Dessin Détection Auto (Vert) — déjà dans le repère compressé ---
     if detected_boxes:
@@ -92,12 +71,13 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
             ax.add_patch(rect)
             plt.text(x + wb, y + hb + 10, "Auto", color='#00FF00', fontsize=8, ha='right')
 
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     plt.title(f"{wavelet_name} - {timestamp}")
     plt.grid(alpha=0.2, linestyle=':', color='white')
 
-    plt.savefig(save_path, dpi=150)
+    plt.savefig(filepath, dpi=150)
     plt.close()
-    print(f"Image sauvegardée : {save_path}")
+    print(f"Image sauvegardée : {filepath}")
 
 def compress_spectrogram(spectrogram, downsample_factor, out_h_px=1500):
     """

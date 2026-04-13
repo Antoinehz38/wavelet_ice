@@ -1,7 +1,8 @@
 import os, cv2, datetime
 import numpy as np
 from dataclasses import dataclass
-from src.data_processing.tools import evaluations, dsp, viz, vision, dsp_rc
+from src.data_processing.tools.viz import save_viz_comparison, compress_spectrogram
+from src.data_processing.tools import evaluations, dsp, vision, dsp_rc
 from src.data_processing.tools.raised_cosine import RaisedCosineWavelet
 
 from src.data_processing.tools.loaders import load_iq_data
@@ -34,7 +35,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
 
 
     
-    compressed_spec = viz.compress_spectrogram(spec, params['downsample_factor'])
+    compressed_spec = compress_spectrogram(spec, params['downsample_factor'])
 
     if params.get('saveRaw', False):
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -84,8 +85,18 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
         else:
             print("Pas de Vérité Terrain disponible pour l'évaluation.")
 
+    # Generate filename for the visualization
+    if params['transform'] == 'cwt_rc':
+        wavelet_name = "Raised_Cosine"
+    elif params['transform'] == 'cwt':
+        wavelet_name = params['wavelet'].replace('/', '_')
+    else:
+        wavelet_name = "Wavelet"
+    
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{wavelet_name}_start_{time_window.start}_length_{time_window.length}.png"
+    filepath = os.path.join(output_dir, filename)
 
-
-    viz.save_viz_comparison(compressed_spec, meta, boxes, output_dir, params)
+    save_viz_comparison(compressed_spec, gt_boxes_pixels, boxes, filepath, params)
 
     return None

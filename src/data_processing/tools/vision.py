@@ -1,6 +1,6 @@
 import cv2
-from src.data_processing.tools.test import moyenne_temporelle_spectrogramme, creer_et_appliquer_passe_bas 
-from src.data_processing.tools.test import sauvegarder_visualisation_avec_boxes, detecter_signaux_robustes, affiner_bordures_temporelles, fusionner_detections_precises
+from src.data_processing.tools.detection_helpers import moyenne_temporelle_spectrogramme, creer_et_appliquer_passe_bas 
+from src.data_processing.tools.detection_helpers import sauvegarder_visualisation_avec_boxes, detecter_signaux_robustes, affiner_bordures_temporelles, fusionner_detections_precises
                                             
 import numpy as np
 

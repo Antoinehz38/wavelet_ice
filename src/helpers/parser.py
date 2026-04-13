@@ -85,4 +85,11 @@ def parse_args():
         help = "number of points per window for CWT calculation"
     )
 
+    parser.add_argument(
+        "--runPipelineOnFolder",
+        type=Path,
+        default=None,
+        help="Dossier d'entrée contenant plusieurs fichiers .sigmf-data à traiter (optionnel, si spécifié, --input est ignoré)"
+    )
+
     return parser.parse_args()

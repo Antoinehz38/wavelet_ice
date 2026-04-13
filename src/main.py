@@ -5,7 +5,6 @@ import datetime
 from src.cwt_scheduler import build_cwt_windows_from_annotations
 from src.helpers.parser import parse_args
 from src.data_processing.tools import evaluations, dsp, loaders, viz, vision, dsp_rc
-from src.data_processing.tools.test import detect_signals_by_projections, tighten_box_2d,  tighten_box_with_energy
 from src.data_processing.tools.raised_cosine import RaisedCosineWavelet
 from src.compute_signal import run_signal_processing_pipeline
 
@@ -66,6 +65,27 @@ def main()->None:
 
     if args.addPrediction:
         PARAMS['addPrediction'] = True
+    
+    if args.runPipelineOnFolder:
+        input_folder = str(args.runPipelineOnFolder)
+        output_dir = str(args.output)
+        loaders.ensure_dir(output_dir)
+        for file in os.listdir(input_folder):
+            if file.endswith(".sigmf-data"):
+                input_file = os.path.join(input_folder, file)
+                meta= loaders.load_metadata(input_file.replace(".sigmf-data", ".sigmf-meta"))
+                windows = build_cwt_windows_from_annotations(
+                            annotations=annotations,
+                            points_per_window=PARAMS['points_per_window'],
+                            global_start=PARAMS['offset'],
+                            global_end=PARAMS['offset'] + PARAMS['duration'],
+                        )
+    
+                for w in windows:
+                    run_signal_processing_pipeline(input_file, meta, output_dir, 
+                                                time_window=w, params=PARAMS)
+
+        return None 
 
     output_dir = str(args.output)
     loaders.ensure_dir(output_dir)
@@ -79,8 +99,12 @@ def main()->None:
         global_start=PARAMS['offset'],
         global_end=PARAMS['offset'] + PARAMS['duration'],
     )
-    
-    for w in windows:
+    print(f"{len(windows)} fenêtres CWT à calculer.")
+    for i, w in enumerate(windows):
+        print(
+            f"[{i}] start={w.start}, end={w.end}, len={w.length}, "
+            f"active={w.descriptions}")
+        
         run_signal_processing_pipeline(input_file, meta, output_dir, 
                                        time_window=w, params=PARAMS)
 if __name__ == "__main__":

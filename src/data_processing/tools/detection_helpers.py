@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from scipy.ndimage import gaussian_filter, label, find_objects
+from scipy.ndimage import label, find_objects
 from scipy.signal import butter, filtfilt, find_peaks
 
 
