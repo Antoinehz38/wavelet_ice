@@ -100,7 +100,7 @@ def main()->None:
                 if y_start < 0: y_start = 0
                 if y_end > PARAMS['img_height']: y_end = PARAMS['img_height']
 
-                x = ann['core:sample_start']
+
                 w = min(ann['core:sample_count'], PARAMS['duration'] - x)
                 h = y_end - y_start
 
