@@ -9,86 +9,92 @@ from .dsp import freq_to_pixel_linear
 
 def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, params):
     """
-    Sauvegarde l'image avec axes physiques (Hz) et comparaison BBox.
+    Sauvegarde l'image compressée (uint8 grayscale) avec axes physiques (Hz / échantillons)
+    et comparaison BBox ground-truth (cyan) vs détection auto (vert).
+
+    spectrogram : np.ndarray uint8, image compressée (out_h_px, out_w_px)
+    detected_boxes : liste de (x, y, w, h) dans le repère compressé
     """
 
     if params['transform'] == 'cwt_rc':
         wavelet_name = "Raised Cosine"
-
     elif params['transform'] == 'cwt':
-            wavelet_name = params['wavelet']  
-
+        wavelet_name = params['wavelet']
     else:
         wavelet_name = "Wavelet"
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{wavelet_name}_{timestamp}.png"
     save_path = os.path.join(output_dir, filename)
-    
+
     h, w = spectrogram.shape
     f_max = params['f_max']
     duration = params['duration']
-    
+    ds = params['downsample_factor']
+    img_height_orig = params['img_height']
+    scale_y = h / img_height_orig
+
     plt.figure(figsize=(16, 10))
-    
-    # --- Affichage Spectro ---
-    vm = np.max(spectrogram)
-    # Note : On n'utilise pas 'extent' ici pour garder la logique "pixel" pour les bbox,
-    # on change juste les étiquettes (ticks) après.
-    plt.imshow(spectrogram, aspect='auto', cmap='inferno', origin='upper',
-               vmin=vm-40, vmax=vm) 
-    
+
+    # --- Affichage image compressée (déjà en uint8 grayscale) ---
+    plt.imshow(spectrogram, aspect='auto', cmap='gray', origin='upper',
+               vmin=0, vmax=255)
+
     ax = plt.gca()
 
-    # --- Gestion des Axes (Le Fix) ---
-    # On crée 11 points de repère sur l'axe Y (pixels)
-    yticks_pixels = np.linspace(0, h-1, 11)
-    # On calcule les valeurs Hz correspondantes : de +F_max à -F_max
+    # --- Axe Y : fréquences (Hz) ---
+    yticks_pixels = np.linspace(0, h - 1, 11)
     yticks_labels = np.linspace(f_max, -f_max, 11)
-    # On formate pour n'avoir que 2 décimales
-    labels_txt = [f"{val:.2f}" for val in yticks_labels]
-    
-    plt.yticks(yticks_pixels, labels_txt)
+    labels_y = [f"{val:.2f}" for val in yticks_labels]
+    plt.yticks(yticks_pixels, labels_y)
     plt.ylabel("Fréquence (Hz)")
+
+    # --- Axe X : temps en échantillons originaux ---
+    xticks_pixels = np.linspace(0, w - 1, min(11, w))
+    xticks_labels = xticks_pixels * ds
+    labels_x = [f"{int(val)}" for val in xticks_labels]
+    plt.xticks(xticks_pixels, labels_x)
     plt.xlabel("Temps (Échantillons)")
 
-    # --- 1. Dessin Vérité Terrain (Cyan) ---
+    # --- 1. Dessin Vérité Terrain (Cyan) — converti vers repère compressé ---
     if meta_data:
         for ann in meta_data.get("annotations", []):
             if ann['core:sample_start'] < duration:
-                # Conversion Hz -> Pixels
-                y_start = freq_to_pixel_linear(ann['core:freq_upper_edge'], h, f_max)
-                y_end = freq_to_pixel_linear(ann['core:freq_lower_edge'], h, f_max)
-                
-                # Vérification pour éviter les crashs si hors image
+                # Conversion Hz -> pixels dans le repère original
+                y_start = freq_to_pixel_linear(ann['core:freq_upper_edge'], img_height_orig, f_max)
+                y_end = freq_to_pixel_linear(ann['core:freq_lower_edge'], img_height_orig, f_max)
+
                 if y_start < 0: y_start = 0
-                if y_end > h: y_end = h
+                if y_end > img_height_orig: y_end = img_height_orig
+
+                x_orig = ann['core:sample_start']
+                w_orig = min(ann['core:sample_count'], duration - x_orig)
+
+                # Conversion vers le repère compressé
+                cx = x_orig / ds
+                cw = w_orig / ds
+                cy = y_start * scale_y
+                ch = (y_end - y_start) * scale_y
 
                 rect = patches.Rectangle(
-                    (ann['core:sample_start'], y_start),
-                    min(ann['core:sample_count'], duration - ann['core:sample_start']),
-                    y_end - y_start,
+                    (cx, cy), cw, ch,
                     linewidth=2, edgecolor='cyan', facecolor='none'
                 )
                 ax.add_patch(rect)
-                plt.text(ann['core:sample_start'], y_start-5, ann.get('core:description',''), 
+                plt.text(cx, cy - 5, ann.get('core:description', ''),
                          color='cyan', fontsize=9, fontweight='bold')
 
-    # --- 2. Dessin Détection Auto (Vert) ---
+    # --- 2. Dessin Détection Auto (Vert) — déjà dans le repère compressé ---
     if detected_boxes:
         for (x, y, wb, hb) in detected_boxes:
-            rect = patches.Rectangle((x, y), wb, hb, 
+            rect = patches.Rectangle((x, y), wb, hb,
                                      linewidth=2, edgecolor='#00FF00', facecolor='none', linestyle='--')
             ax.add_patch(rect)
-            # Label discret
-            plt.text(x+wb, y+hb+10, "Auto", color='#00FF00', fontsize=8, ha='right')
+            plt.text(x + wb, y + hb + 10, "Auto", color='#00FF00', fontsize=8, ha='right')
 
-
-
-    
     plt.title(f"{wavelet_name} - {timestamp}")
     plt.grid(alpha=0.2, linestyle=':', color='white')
-    
+
     plt.savefig(save_path, dpi=150)
     plt.close()
     print(f"Image sauvegardée : {save_path}")
