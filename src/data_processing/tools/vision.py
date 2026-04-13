@@ -6,6 +6,8 @@ import numpy as np
 
 
 def detect_box(image, delta_t=100, intensite_lissage=0.015, seuil_detection=25, seuil_affinage=20, lissage_affinage=0.1):
+    F, T = image.shape
+    delta_t = min(delta_t, T//10)
     spectrogramme_moyen = moyenne_temporelle_spectrogramme(image, delta_t=delta_t)
 
 
