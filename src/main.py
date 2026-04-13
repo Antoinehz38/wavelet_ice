@@ -87,23 +87,11 @@ def main()->None:
     
     compressed_spec = viz.compress_spectrogram(spec, PARAMS['downsample_factor'])
 
-    # Debug : sauvegarde du spectrogramme compressé
-    cv2.imwrite(os.path.join(output_dir, "debug.png"), compressed_spec)
-    print(f"Debug sauvegardé : {os.path.join(output_dir, 'debug.png')} — shape={compressed_spec.shape}, dtype={compressed_spec.dtype}")
-
     boxes = []
     if args.addPrediction:
         print("adding prediction ... ")
        
-        boxes, debug = detect_signals_by_projections(compressed_spec)
-        z = debug["z"]
-        boxes = [
-            tighten_box_2d(
-                z,
-                box,
-            )
-            for box in boxes
-            ]
+        boxes = vision.detect_box(compressed_spec, delta_t=100, intensite_lissage=0.015)
         print(f"-> {len(boxes)} objets détectés.")
 
         # Facteurs de conversion spectrogramme original -> image compressée
