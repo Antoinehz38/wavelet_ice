@@ -1,3 +1,5 @@
+import os
+import cv2
 from src.helpers.parser import parse_args
 from src.data_processing.tools import evaluations, dsp, loaders, viz, vision, dsp_rc
 from src.data_processing.tools.test import detect_signals_by_projections, tighten_box_2d,  tighten_box_with_energy
@@ -84,6 +86,10 @@ def main()->None:
         return None
     
     compressed_spec = viz.compress_spectrogram(spec, PARAMS['downsample_factor'])
+
+    # Debug : sauvegarde du spectrogramme compressé
+    cv2.imwrite(os.path.join(output_dir, "debug.png"), compressed_spec)
+    print(f"Debug sauvegardé : {os.path.join(output_dir, 'debug.png')} — shape={compressed_spec.shape}, dtype={compressed_spec.dtype}")
 
     boxes = []
     if args.addPrediction:
