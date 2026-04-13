@@ -78,4 +78,18 @@ def parse_args():
         help = "to down size the png picture"
     )
 
+    parser.add_argument(
+        "--pointsPerWindow",
+        type= int,
+        default = 100_000,
+        help = "number of points per window for CWT calculation"
+    )
+
+    parser.add_argument(
+        "--runPipelineOnFolder",
+        type=Path,
+        default=None,
+        help="Dossier d'entrée contenant plusieurs fichiers .sigmf-data à traiter (optionnel, si spécifié, --input est ignoré)"
+    )
+
     return parser.parse_args()

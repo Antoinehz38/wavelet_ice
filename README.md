@@ -27,4 +27,9 @@ You have to run the main file, you can use this command :
 python3 -m src.main --input /raid/spawc21_challenge_dataset/train/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-data --output ~/guido_leteurtre_hanachowicz/wavelet_ice/data/test
 ```
 
+```
+python3 -m src.main --input /raid/spawc21_challenge_dataset/train/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-data --output ~/guido_leteurtre_hanachowicz/hanacho/wavelet_ice/data/benchmark --duration 100_000_000 --addPrediction true --transfoType cwt_rc --pointsPerWindow 2_000_000
+
+```
+
 

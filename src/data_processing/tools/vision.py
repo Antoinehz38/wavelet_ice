@@ -1,69 +1,55 @@
 import cv2
+from src.data_processing.tools.detection_helpers import moyenne_temporelle_spectrogramme, creer_et_appliquer_passe_bas 
+from src.data_processing.tools.detection_helpers import sauvegarder_visualisation_avec_boxes, detecter_signaux_robustes, affiner_bordures_temporelles, fusionner_detections_precises
+                                            
 import numpy as np
 
-def detect_boxes(spectrogram_db, min_db_range=30, morph_kernel_size=(200, 2)):
-    """
-    Détecte les zones d'énergie avec une forte cohésion horizontale.
-    """
-    # 1. Clipping
-    v_max = np.max(spectrogram_db)
-    threshold = v_max - min_db_range
-    
-    img_clean = spectrogram_db.copy()
-    img_clean[img_clean < threshold] = threshold
-    
-    # 2. Normalisation 0-255
-    norm_img = (img_clean - threshold) / (v_max - threshold) * 255
-    norm_img = norm_img.astype(np.uint8)
-    
-    # 3. Prétraitement : FLOU GAUSSIEN RENFORCÉ
-    # Un noyau (7, 7) ou (9, 9) va "baver" les pixels ensemble avant même le seuillage.
-    # Cela réduit drastiquement la sensibilité à la variance locale.
-    blur = cv2.GaussianBlur(norm_img, (7, 7), 0)
-    
-    # 4. Binarisation OTSU
-    _, binary_mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    
-    # 5. Morphologie (La "Super Colle")
-    # On force la fusion horizontale.
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, morph_kernel_size)
-    
-    # Closing = Dilate (bouche les trous) + Erode (restore la taille)
-    # On fait 2 itérations pour être sûr de bien souder les blocs fragmentés
-    final_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-    
-    # 6. Extraction
-    contours, _ = cv2.findContours(final_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    detected_boxes = []
-    for cnt in contours:
-        x, y, w, h = cv2.boundingRect(cnt)
-        
-        # Filtre anti-bruit : 
-        # On ignore les boîtes trop petites (moins de 100px de large ou 3px de haut)
-        if w > 100 and h > 3:
-            detected_boxes.append((x, y, w, h))
-            
-    return detected_boxes, final_mask
 
-def simple_binary_th(gray_image, min_area=50):
-    _, bw = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+def detect_box(image, delta_t=100, 
+               intensite_lissage=0.015, 
+               seuil_detection=25, 
+               seuil_affinage=20, 
+               lissage_affinage=0.1,
+               roll_off_threshold=0.10):
+    F, T = image.shape
+    delta_t = min(delta_t, T//10)
+    spectrogramme_moyen = moyenne_temporelle_spectrogramme(image, delta_t=delta_t)
 
 
-    num, lab, stats, _ = cv2.connectedComponentsWithStats(bw, connectivity=8)
+    spectrogramme_lisse = creer_et_appliquer_passe_bas(
+        spectrogramme_moyen, 
+        frequence_coupure=intensite_lissage, 
+        axe=0
+    )
 
-    bboxes = []
-    H, W = bw.shape
-    for i in range(1, num):
-        x0, y0, w, h, area = stats[i]
-        if area < min_area:
-            continue
-        # filtres optionnels (souvent utiles)
-        if w < 10 or h < 10:
-            continue
-        if w * h > 0.8 * H * W:
-            continue
-        bboxes.append((x0, y0, w, h))
+    detections_list = detecter_signaux_robustes(spectrogramme_lisse, proeminence_min=10, seuil_rolloff=roll_off_threshold)
 
-    return bboxes
+    detection_affinees = affiner_bordures_temporelles(image, detections_list, delta_t, seuil_t=seuil_affinage, lissage_t=lissage_affinage)
+    
 
+    boxes = fusionner_detections_precises(detection_affinees, delta_t)
+
+    return boxes
+if __name__ == "__main__":
+    file_path = "data/test_detection/spectrogram_20260413_150146.png"
+    img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
+
+
+    boxes = detect_box(img)
+
+    sauvegarder_visualisation_avec_boxes(
+        image=img,
+        spectrogramme_moyen=moyenne_temporelle_spectrogramme(img, delta_t=100),
+        delta_t=100,
+        i=25,
+        boxes=boxes,
+        chemin_sortie="data/metrics/visu.png"
+    )
+
+    print("Boxes détectées :", boxes)
+    out = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    for x, y, w, h in boxes:
+        cv2.rectangle(out, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+
+    cv2.imwrite("data/metrics/detected_boxes_tight.png", out)

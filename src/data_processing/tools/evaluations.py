@@ -3,7 +3,7 @@ import numpy as np
 def compute_iou(boxA, boxB):
     """
     Calcule l'Intersection over Union (IoU) entre deux rectangles.
-    Format attendu : (x, y, w, h)
+    Format attendu : (x, y, w, h) ou (x, y, w, h, label)
     """
     # Conversion (x, y, w, h) -> (x1, y1, x2, y2)
     # x1,y1 = Haut-Gauche / x2,y2 = Bas-Droite
