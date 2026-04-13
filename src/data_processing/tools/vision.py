@@ -154,11 +154,11 @@ if __name__ == "__main__":
     # Affichage pour vérification
     img_color = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     img_color_2 = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    for (x, y, w, h) in tight_boxes:
-        cv2.rectangle(img_color, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    # for (x, y, w, h) in tight_boxes:
+    #     cv2.rectangle(img_color, (x, y), (x + w, y + h), (0, 255, 0), 2)
     
-    for (x, y, w, h) in boxes:
-        cv2.rectangle(img_color, (x, y), (x + w, y + h), (255, 0, 0), 2)
+    # for (x, y, w, h) in boxes:
+    #     cv2.rectangle(img_color, (x, y), (x + w, y + h), (255, 0, 0), 2)
     
     for (x, y, w, h) in tight_boxes_2:
         cv2.rectangle(img_color, (x, y), (x + w, y + h), (0, 0, 255), 2)

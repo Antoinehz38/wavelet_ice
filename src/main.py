@@ -78,15 +78,19 @@ def main()->None:
         raise ValueError("PARAMS['transform'] doit être 'cwt' ou 'cwt_rc'")
 
 
+
     if args.saveRaw:
         viz.save_spectrogram_image(spec, output_dir, PARAMS)
         return None
+    
+    compressed_spec = viz.compress_spectrogram(spec, PARAMS['downsample_factor'])
 
     boxes = []
     if args.addPrediction:
         print("adding prediction ... ")
        
-        boxes, z = detect_signals_by_projections(spec)
+        boxes, debug = detect_signals_by_projections(compressed_spec)
+        z = debug["z"]
         boxes = [
             tighten_box_2d(
                 z,
@@ -95,6 +99,12 @@ def main()->None:
             for box in boxes
             ]
         print(f"-> {len(boxes)} objets détectés.")
+
+        # Facteurs de conversion spectrogramme original -> image compressée
+        img_h = compressed_spec.shape[0]  # out_h_px (1500 par défaut)
+        ds = PARAMS['downsample_factor']
+        scale_y = img_h / PARAMS['img_height']
+
         gt_boxes_pixels = []
         if meta:
             for ann in meta.get("annotations", []):
@@ -103,7 +113,7 @@ def main()->None:
                     y_start = dsp.freq_to_pixel_linear(ann['core:freq_upper_edge'], PARAMS['img_height'], PARAMS['f_max'])
                     y_end = dsp.freq_to_pixel_linear(ann['core:freq_lower_edge'], PARAMS['img_height'], PARAMS['f_max'])
 
-                    # Sécuité bornes
+                    # Sécurité bornes (dans le repère original)
                     if y_start < 0: y_start = 0
                     if y_end > PARAMS['img_height']: y_end = PARAMS['img_height']
 
@@ -111,8 +121,13 @@ def main()->None:
                     w = min(ann['core:sample_count'], PARAMS['duration'] - x)
                     h = y_end - y_start
 
-                    # Format (x, y, w, h)
-                    gt_boxes_pixels.append((x, y_start, w, h))
+                    # Conversion vers le repère de l'image compressée
+                    cx = x / ds
+                    cw = w / ds
+                    cy = y_start * scale_y
+                    ch = h * scale_y
+
+                    gt_boxes_pixels.append((cx, cy, cw, ch))
 
         # --- 3c. Lancement Évaluation ---
         if len(gt_boxes_pixels) > 0:

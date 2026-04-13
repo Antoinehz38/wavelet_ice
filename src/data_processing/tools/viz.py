@@ -93,6 +93,32 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
     plt.close()
     print(f"Image sauvegardée : {save_path}")
 
+def compress_spectrogram(spectrogram, downsample_factor, out_h_px=1500):
+    """
+    Reproduit en mémoire le résultat de save_spectrogram_image + cv2.imread(..., GRAYSCALE).
+    Retourne un np.ndarray uint8 (niveaux de gris) de taille (out_h_px, ceil(w/ds)).
+    """
+    vm = np.max(spectrogram)
+    h, w = spectrogram.shape
+    out_w_px = int(np.ceil(w / downsample_factor))
+
+    # 1. Clamp [vm-40, vm] puis normalise dans [0, 1]
+    clipped = np.clip(spectrogram, vm - 40, vm)
+    normed = (clipped - (vm - 40)) / 40.0
+
+    # 2. Resize à la taille cible (même effet que aspect='auto' de imshow)
+    #    cv2.resize attend (width, height)
+    resized = cv2.resize(normed.astype(np.float32), (out_w_px, out_h_px),
+                         interpolation=cv2.INTER_NEAREST)
+
+    # 3. Appliquer la colormap inferno puis convertir en grayscale
+    rgba = cm.inferno(resized)                      # float64 (H, W, 4), valeurs [0,1]
+    rgb = (rgba[:, :, :3] * 255).astype(np.uint8)   # drop alpha, passe en uint8
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+
+    return gray
+
+
 def save_spectrogram_image(spectrogram, output_dir, params):
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"spectrogram_{timestamp}.png"
