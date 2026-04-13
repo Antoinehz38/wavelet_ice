@@ -32,14 +32,14 @@ def parse_args():
     parser.add_argument(
         "--duration",
         type=int,
-        default=20_000,
+        default=None,
         help="Nombre d'échantillons à charger"
     )
 
     parser.add_argument(
         "--offset",
         type=int,
-        default=0,
+        default=None,
         help="Offset in the document"
     )
 
