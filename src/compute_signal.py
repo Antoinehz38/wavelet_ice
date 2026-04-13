@@ -10,6 +10,9 @@ from src.cwt_scheduler import TimeWindow
 
 
 def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str, time_window: TimeWindow, params: dict) -> None:
+    # Bornes absolues de la fenêtre temporelle courante
+    win_start = time_window.start
+    win_end   = time_window.start + time_window.length
     sig = load_iq_data(input_file, num_samples=time_window.length, offset=time_window.start)
 
     if sig is None: return None
@@ -59,28 +62,34 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
         gt_boxes_pixels = []
         if meta:
             for ann in meta.get("annotations", []):
-                if ann['core:sample_start'] < params['duration']:
+                ann_start = ann['core:sample_start']
+                ann_end   = ann_start + ann['core:sample_count']
 
-                    y_start = dsp.freq_to_pixel_linear(ann['core:freq_upper_edge'], params['img_height'], params['f_max'])
-                    y_end = dsp.freq_to_pixel_linear(ann['core:freq_lower_edge'], params['img_height'], params['f_max'])
+                # Ne garder que les annotations qui chevauchent la fenêtre courante
+                if ann_end <= win_start or ann_start >= win_end:
+                    continue
 
-                    # Sécurité bornes (dans le repère original)
-                    if y_start < 0: 
-                        y_start = 0
-                    if y_end > params['img_height']: 
-                        y_end = params['img_height']
+                y_start = dsp.freq_to_pixel_linear(ann['core:freq_upper_edge'], params['img_height'], params['f_max'])
+                y_end = dsp.freq_to_pixel_linear(ann['core:freq_lower_edge'], params['img_height'], params['f_max'])
 
-                    x = ann['core:sample_start']
-                    w = min(ann['core:sample_count'], params['duration'] - x)
-                    h = y_end - y_start
+                # Sécurité bornes (dans le repère original)
+                y_start = max(y_start, 0)
+                y_end   = min(y_end, params['img_height'])
 
-                    # Conversion vers le repère de l'image compressée
-                    cx = x / ds
-                    cw = w / ds
-                    cy = y_start * scale_y
-                    ch = h * scale_y
+                # Coordonnées X relatives à la fenêtre, clampées aux bords
+                x_rel = max(ann_start - win_start, 0)
+                x_end = min(ann_end,   win_end) - win_start
+                w = x_end - x_rel
+                h = y_end - y_start
 
-                    gt_boxes_pixels.append((cx, cy, cw, ch))
+                # Conversion vers le repère de l'image compressée
+                cx = x_rel / ds
+                cw = w / ds
+                cy = y_start * scale_y
+                ch = h * scale_y
+
+                label = ann.get('core:description', 'GT')
+                gt_boxes_pixels.append((cx, cy, cw, ch, label))
 
         # --- 3c. Lancement Évaluation ---
         if len(gt_boxes_pixels) > 0:

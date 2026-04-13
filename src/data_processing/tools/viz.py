@@ -55,13 +55,18 @@ def save_viz_comparison(spectrogram, gt_boxes_pixels, detected_boxes, filepath, 
 
     # --- 1. Dessin Vérité Terrain (Cyan) - déjà converti vers repère compressé ---
     if gt_boxes_pixels:
-        for (cx, cy, cw, ch) in gt_boxes_pixels:
+        for box in gt_boxes_pixels:
+            if len(box) == 5:
+                cx, cy, cw, ch, label = box
+            else:
+                cx, cy, cw, ch = box
+                label = "GT"
             rect = patches.Rectangle(
                 (cx, cy), cw, ch,
                 linewidth=2, edgecolor='cyan', facecolor='none'
             )
             ax.add_patch(rect)
-            plt.text(cx, cy - 5, "GT", color='cyan', fontsize=9, fontweight='bold')
+            plt.text(cx, cy - 5, label, color='cyan', fontsize=9, fontweight='bold')
 
     # --- 2. Dessin Détection Auto (Vert) — déjà dans le repère compressé ---
     if detected_boxes:
