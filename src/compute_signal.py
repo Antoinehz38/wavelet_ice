@@ -65,8 +65,10 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
                     y_end = dsp.freq_to_pixel_linear(ann['core:freq_lower_edge'], params['img_height'], params['f_max'])
 
                     # Sécurité bornes (dans le repère original)
-                    if y_start < 0: y_start = 0
-                    if y_end > params['img_height']: y_end = params['img_height']
+                    if y_start < 0: 
+                        y_start = 0
+                    if y_end > params['img_height']: 
+                        y_end = params['img_height']
 
                     x = ann['core:sample_start']
                     w = min(ann['core:sample_count'], params['duration'] - x)

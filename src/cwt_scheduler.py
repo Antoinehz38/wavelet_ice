@@ -139,6 +139,7 @@ def build_overlap_segments(
 def split_segments_into_windows(
     segments: List[Dict[str, Any]],
     points_per_window: int = 100_000,
+    padding: int = 150_000,
 ) -> List[TimeWindow]:
     """
     Découpe chaque segment en fenêtres de taille <= points_per_window.
@@ -158,9 +159,9 @@ def split_segments_into_windows(
         while cursor < end:
             w_end = min(cursor + points_per_window, end)
             windows.append(TimeWindow(
-                start=cursor,
-                end=w_end,
-                length=w_end - cursor,
+                start=max(cursor- padding, 0),  # Optionnel : ajouter un padding avant la fenêtre pour le contexte
+                end=w_end+ padding,  # Optionnel : ajouter un padding après la fenêtre pour le contexte
+                length=w_end - max(cursor- padding, 0) + padding,
                 active_annotations=active_annotations,
                 descriptions=descriptions,
             ))
