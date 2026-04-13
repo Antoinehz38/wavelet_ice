@@ -43,6 +43,7 @@ data/
 datasets/
 outputs/
 results/
+notes.txt
 *.h5
 *.npz
 *.npy

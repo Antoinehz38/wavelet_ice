@@ -10,6 +10,11 @@ python3.12 -m venv .venv
 source .venv/bin/activate  
 ```
 
+```sur windows
+python -m venv .venv
+source .venv/Scripts/activate 
+```
+
 Then to install dependencies just run: 
 
 ```bash
