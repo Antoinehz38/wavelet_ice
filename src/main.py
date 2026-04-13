@@ -137,7 +137,7 @@ def main()->None:
 
 
 
-    viz.save_viz_comparison(spec, meta, boxes, output_dir, PARAMS)
+    viz.save_viz_comparison(compressed_spec, meta, boxes, output_dir, PARAMS)
 
     return None
 
