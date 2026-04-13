@@ -167,10 +167,13 @@ def detecter_signaux_toutes_fenetres(spectrogramme_lisse, seuil=25):
     return liste_detections
 
 
-def detecter_signaux_robustes(spectrogramme_lisse, proeminence_min=5, largeur_min=5, distance_min=10, ratio_intensite_max=1.5):
+import numpy as np
+from scipy.signal import find_peaks
+
+def detecter_signaux_robustes(spectrogramme_lisse, proeminence_min=5, largeur_min=5, distance_min=10, ratio_intensite_max=1.5, seuil_rolloff=0.90):
     """
-    Détecte les signaux et sépare intelligemment les signaux collés 
-    qui ont des intensités différentes.
+    Détecte les signaux, gère les fusions/séparations complexes, et 
+    rogne les bords (roll-off) pour des boîtes parfaitement ajustées à l'énergie.
     """
     _, T_reduit = spectrogramme_lisse.shape
     liste_detections = []
@@ -178,13 +181,12 @@ def detecter_signaux_robustes(spectrogramme_lisse, proeminence_min=5, largeur_mi
     for i in range(T_reduit):
         profil_frequence = spectrogramme_lisse[:, i]
         
-        # 1. On baisse un peu la proéminence par défaut (ex: 5) pour être sûr 
-        # de détecter les ondulations du "plateau" le plus faible.
+        # 1. Détection initiale (volontairement large au niveau de la base)
         pics, proprietes = find_peaks(
             profil_frequence, 
             prominence=proeminence_min, 
             width=largeur_min,
-            rel_height=0.85,
+            rel_height=0.85, 
             distance=distance_min
         )
         
@@ -201,59 +203,71 @@ def detecter_signaux_robustes(spectrogramme_lisse, proeminence_min=5, largeur_mi
                     'intensite': profil_frequence[pic_idx]
                 })
                 
-        # 2. LA NOUVELLE COUCHE : FUSION INTELLIGENTE PAR VALLÉE
+        # 2. FUSION INTELLIGENTE PAR VALLÉE
         if len(bandes_brutes) > 0:
-            # On trie de bas en haut
             bandes_brutes.sort(key=lambda x: x['f_min'])
             bandes_fusionnees = [bandes_brutes[0]]
             
             for bande_actuelle in bandes_brutes[1:]:
                 derniere_bande = bandes_fusionnees[-1]
-                
-                # Est-ce que les bandes se touchent ?
                 se_touchent = bande_actuelle['f_min'] <= derniere_bande['f_max'] + 5
                 
                 if se_touchent:
                     intensite_prec = derniere_bande['intensite']
                     intensite_act = bande_actuelle['intensite']
-                    
-                    # Différence d'intensité entre les deux pics (ratio > 1)
                     ratio = max(intensite_prec, intensite_act) / max(min(intensite_prec, intensite_act), 1)
                     
-                    # Recherche du point le plus bas (la vallée) entre les deux sommets
                     idx_debut = derniere_bande['pic_idx']
                     idx_fin = bande_actuelle['pic_idx']
-                    if idx_fin > idx_debut:
-                        idx_vallee = np.argmin(profil_frequence[idx_debut : idx_fin]) + idx_debut
-                    else:
-                        idx_vallee = idx_debut
-                        
+                    idx_vallee = np.argmin(profil_frequence[idx_debut : idx_fin]) + idx_debut if idx_fin > idx_debut else idx_debut
                     intensite_vallee = profil_frequence[idx_vallee]
-                    
-                    # Profondeur de la vallée par rapport au plus petit des deux pics
-                    # Proche de 1 = vallée quasi inexistante. Proche de 0 = creux très profond.
                     profondeur_relative = intensite_vallee / max(min(intensite_prec, intensite_act), 1)
                     
-                    # --- LA DÉCISION ---
-                    # Si les intensités sont similaires (< 1.5) ET qu'il n'y a pas de grand creux
                     if ratio < ratio_intensite_max and profondeur_relative > 0.6:
-                        # C'est le même signal qui ondule (ex: ton plateau) -> ON FUSIONNE
+                        # Fusion du plateau
                         derniere_bande['f_max'] = max(derniere_bande['f_max'], bande_actuelle['f_max'])
                         if intensite_act > intensite_prec:
                             derniere_bande['intensite'] = intensite_act
                             derniere_bande['pic_idx'] = bande_actuelle['pic_idx']
                     else:
-                        # Ce sont des signaux différents collés -> ON SÉPARE !
-                        # On ajuste la limite exactement au fond de la vallée
+                        # Séparation par la vallée
                         derniere_bande['f_max'] = idx_vallee
                         bande_actuelle['f_min'] = idx_vallee + 1
                         bandes_fusionnees.append(bande_actuelle)
                 else:
-                    # Elles ne se touchent pas, c'est un nouveau signal
                     bandes_fusionnees.append(bande_actuelle)
             
-            # On reformate en tuples (f_min, f_max) pour la suite de ton code
-            signaux_dans_fenetre = [(b['f_min'], b['f_max']) for b in bandes_fusionnees]
+            # ---------------------------------------------------------
+            # 3. NOUVEAU : ROGNAGE DU ROLL-OFF (RÉDUCTION DE LA LARGEUR)
+            # ---------------------------------------------------------
+            bandes_trimmees = []
+            for b in bandes_fusionnees:
+                f_min = b['f_min']
+                f_max = min(b['f_max'], len(profil_frequence) - 1) # Sécurité bordure
+                
+                if f_max > f_min:
+                    # On isole le profil d'intensité uniquement pour cette bande
+                    segment = profil_frequence[f_min : f_max + 1]
+                    
+                    # Calcul du seuil absolu pour CETTE bande (ex: 90% de son maximum)
+                    seuil_coupure = np.max(segment) * seuil_rolloff
+                    
+                    # On cherche tous les pixels de la bande qui sont au-dessus du seuil
+                    indices_valides = np.where(segment >= seuil_coupure)[0]
+                    
+                    if len(indices_valides) > 0:
+                        # On redéfinit les bords sur le premier et le dernier pixel valide
+                        nouveau_f_min = f_min + indices_valides[0]
+                        nouveau_f_max = f_min + indices_valides[-1]
+                        bandes_trimmees.append((nouveau_f_min, nouveau_f_max))
+                    else:
+                        # Fallback (ne devrait mathématiquement pas arriver)
+                        bandes_trimmees.append((f_min, f_max))
+                else:
+                    bandes_trimmees.append((f_min, f_max))
+                    
+            signaux_dans_fenetre = bandes_trimmees
+            
         else:
             signaux_dans_fenetre = []
             

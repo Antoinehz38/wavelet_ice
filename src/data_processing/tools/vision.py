@@ -17,7 +17,6 @@ def detect_box(image, delta_t=100, intensite_lissage=0.015, seuil_detection=25, 
         axe=0
     )
 
-    #detections_list = detecter_signaux_toutes_fenetres(spectrogramme_lisse, seuil=seuil_detection)
     detections_list = detecter_signaux_robustes(spectrogramme_lisse, proeminence_min=10)
 
     detection_affinees = affiner_bordures_temporelles(image, detections_list, delta_t, seuil_t=seuil_affinage, lissage_t=lissage_affinage)
