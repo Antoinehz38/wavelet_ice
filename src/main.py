@@ -4,10 +4,7 @@ from src.data_processing.tools.raised_cosine import RaisedCosineWavelet
 import numpy as np
 
 PARAMS = {
-    'offset': 606028,  # askip offset n’est pas en échantillons, il est en octets. (C’est à cause de loaders.py (line 9)). Dans numpy.fromfile, offset est un décalage en bytes. Or un échantillon complex64 vaut 8 octets. Donc :  offset_bytes = sample_start * 8
-    # Autre point important : avec offset != 0, les annotations sont mal recalées dans main.py (line 89) et viz.py (line 56), parce que le code utilise encore ann['core:sample_start'] sans soustraire l’offset local. 
-    # Donc : le signal affiché sera le bon ;
-    # mais les boîtes GT risquent d’être absentes ou au mauvais endroit.
+    'offset': 606028,  
 
     'duration': 2_000_000,
     'fs': 1.0, # fréquence d'échantillonnage - nb d'echantillons par seconde (pour la conversion temps <-> échantillons) fs = 1.0 : on est en unités normalisées, pas en secondes physiques utiles. La conversion est : temps (s) = nombre_d'échantillons
