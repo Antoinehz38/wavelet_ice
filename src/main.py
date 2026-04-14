@@ -3,6 +3,7 @@ import datetime
 
 import numpy as np
 
+from src.helpers.display import print_transformation_params
 from src.helpers.parser import parse_args
 from src.data_processing.tools import evaluations, dsp, loaders, viz, vision, dsp_rc
 from src.data_processing.tools.raised_cosine import RaisedCosineWavelet
@@ -33,6 +34,7 @@ def main() -> None:
     PARAMS['offset'] = args.offset
     PARAMS['transform'] = args.transfoType
     PARAMS['wavelet'] = args.waveletType
+    print_transformation_params(PARAMS)
 
     output_dir = str(args.output)
     loaders.ensure_dir(output_dir)
