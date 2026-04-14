@@ -114,10 +114,11 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
     compressed_spec = compress_spectrogram(spec, params['downsample_factor'])
 
     if params.get('saveRaw', False):
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"spectrogram_{timestamp}.png"
-        cv2.imwrite(os.path.join(output_dir, filename), compressed_spec)
-        return [], [], compressed_spec.shape[1], compressed_spec.shape[0]
+        output_path = build_output_dir_path(output_dir, params)
+        wavelet_name = resolve_wavelet_name(params)
+        filename = f"raw_{wavelet_name}_start_{time_window.start}_length_{time_window.length}.png"
+        filepath = os.path.join(output_path, filename)
+        cv2.imwrite(filepath, compressed_spec)
 
     boxes = []
     gt_boxes_pixels = []
@@ -167,7 +168,6 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             print("No ground truth available for evaluation.")
 
     
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = build_output_dir_path(output_dir, params)
     wavelet_name = resolve_wavelet_name(params)
     filename = f"{wavelet_name}_start_{time_window.start}_length_{time_window.length}.png"

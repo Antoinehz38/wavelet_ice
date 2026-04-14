@@ -80,12 +80,16 @@ def main()->None:
                         global_start=PARAMS['offset'],
                         global_end=PARAMS['offset'] + PARAMS['duration'],
                         )
-                for transfo, wavelet in [['cwt',"cmor100.0-1.0"], 
-                                 ['cwt',"fbsp10-0.01-2"]]:
-                                #  ['cwt_rc', ''], 
+                if len(windows) > 10: 
+                    windows = windows[:10]
+                for transfo, wavelet in [
+                                 ['cwt',"cmor100.0-1.0"], 
+                                 ['cwt',"fbsp10-0.01-2"],
+                                 ['cwt_rc', ''], 
                                 #  ['stft', ''], 
                                 #  ['cwt_bump', ''], 
-                                #  ['cwt_morse', '']]:
+                                #  ['cwt_morse', '']
+                                 ]:
                     PARAMS['transform'] = transfo
                     if transfo == 'cwt':
                         PARAMS['wavelet'] = wavelet
