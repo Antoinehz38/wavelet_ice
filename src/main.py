@@ -78,6 +78,8 @@ def main()->None:
             for file in os.listdir(input_folder):
                 if file.endswith(".sigmf-data"):
                     input_file = os.path.join(input_folder, file)
+                    PARAMS['input_file'] = input_file
+                    print(f"\nProcessing file: {input_file}")
                     meta = load_metadata(input_file.replace(".sigmf-data", ".sigmf-meta"))
                     annotations = meta.get("annotations", []) if meta else []
                     windows = build_transition_windows(
@@ -86,6 +88,7 @@ def main()->None:
                             global_start=PARAMS['offset'],
                             global_end=PARAMS['offset'] + PARAMS['duration'],
                             )
+                    print_transformation_params(PARAMS)
     
                     print(f"{len(windows)} CWT windows to compute.")
                     total_boxes = []
@@ -101,7 +104,7 @@ def main()->None:
 
                     # Merge all detected boxes into a single global prediction list
                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    output_path = build_output_dir_path(output_dir, PARAMS, timestamp)
+                    output_path = build_output_dir_path(output_dir, PARAMS)
                     wavelet_name = resolve_wavelet_name(PARAMS)
                     merged = merge_boxes(total_boxes)
                     print(f"\n=== Merged predictions: {len(merged['annotations'])} boxes ===")

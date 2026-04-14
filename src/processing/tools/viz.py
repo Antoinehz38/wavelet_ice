@@ -167,6 +167,6 @@ def _resolve_example_output_dir(output_dir, params):
     return example_dir
 
 
-def build_output_dir_path(output_dir, params, timestamp, extension=".png"):
+def build_output_dir_path(output_dir, params):
     target_output_dir = _resolve_example_output_dir(output_dir, params)
     return target_output_dir

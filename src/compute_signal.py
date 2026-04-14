@@ -40,6 +40,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             params['f_min'], params['f_max'], params['fs'],
         )
         print(f"CWT computation time: {time.time() - t:.2f} seconds")
+    
     elif params['transform'] == 'cwt_rc':
         t = time.time()
         rc = RaisedCosineWavelet(
@@ -65,6 +66,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             nfft=params['stft_nfft'],
             window=params['stft_window'],
         )
+    
     elif params['transform'] == 'dtcwt':
         spec = compute_dual_dtcwt_scalogram_dyadic(
             iq_data=sig,
@@ -103,8 +105,9 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             params['f_max'],
             params['fs']
         )
+    
     else:
-        raise ValueError("params['transform'] must be 'cwt' or 'cwt_rc'")
+        raise ValueError("params['transform'] must be 'cwt', 'cwt_rc', 'stft', 'dtcwt', 'cwt_bump', or 'cwt_morse'")
 
 
     
@@ -165,7 +168,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
 
     
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = build_output_dir_path(output_dir, params, timestamp)
+    output_path = build_output_dir_path(output_dir, params)
     wavelet_name = resolve_wavelet_name(params)
     filename = f"{wavelet_name}_start_{time_window.start}_length_{time_window.length}.png"
     filepath = os.path.join(output_path, filename)
