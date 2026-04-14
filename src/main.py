@@ -18,26 +18,33 @@ PARAMS = {
     'points_per_window': 1_000_000,
     'f_min': 0.005,
     'f_max': 0.5,
-    'rc_fc': 1.0,
-    'rc_B': 0.12,
-    'rc_beta': 0.25,
+    
+    'rc_fc': 1.0,            
+    'rc_B': 0.06,            
+    'rc_beta': 0.12,         
+    
     'detect_db_range': 28,
     'detect_kernel': (200, 2),
     'downsample_factor': 500,
     'saveRaw': False,
     'addPrediction': False,
-    'stft_nperseg': 256,
-    'stft_noverlap': 192,
-    'stft_nfft': 512,          
-    'stft_window': 'hann',    
-    'dtcwt_levels': 8,
-    'dtcwt_biort': 'near_sym_a',
-    'dtcwt_qshift': 'qshift_a',
-    'dtcwt_resize_to_signal_len': False,
-    'bump_fc': 0.15,       
-    'bump_B': 0.01,         
-    'morse_beta': 450.0,
-    'morse_gamma': 3.0, 
+
+    'stft_nperseg': 256, #taille fenetre, si grand : meilleure resolution temporelle, moins frequentielle et inversement
+    'stft_noverlap': 192, #recouvrement, souvent 75% de nperseg
+    'stft_nfft': 512,          # mettre None pour prendre nperseg, si nfft > nperseg → zero-padding
+    'stft_window': 'hann',     # fenetre de hann ou de hamming ou autre, il faudrait en tester plusieurs
+  
+    'dwt_wavelet': 'db4',
+    'dwt_mode': 'periodization',
+    'dwt_level': 256,         # None => niveau max automatique
+    'dwt_use_abs': True,       # |coeff|^2
+    'dwt_include_approx': False,
+
+    'bump_fc': 0.30,        # w=2*pi*fc
+    'bump_B': 0.005,         # demi-largeur du support : sigma= 2*pi*B
+
+    'morse_beta': 1150.0,
+    'morse_gamma': 3.0, #produit temps frequence P=beta/gamma
 }
 
 def main()->None:
@@ -83,7 +90,7 @@ def main()->None:
                 if len(windows) > 10: 
                     windows = windows[:10]
                 for transfo, wavelet in [
-                                 ['cwt',"cmor100.0-1.0"], 
+                                 ['cwt',"cmor220.0-1.0"], 
                                  ['cwt',"fbsp10-0.01-2"],
                                  ['cwt_rc', ''], 
                                 #  ['stft', ''], 

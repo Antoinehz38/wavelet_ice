@@ -51,8 +51,8 @@ def parse_args():
     parser.add_argument(
         "--waveletType",
         type=str,
-        default="cmor100.0-1.0",
-        help="Wavelet type for CWT (e.g. 'cmor100.0-1.0' or 'fbsp10-0.01-2')",
+        default="cmor220.0-1.0",
+        help="Wavelet type for CWT (e.g. 'cmor220.0-1.0' or 'fbsp10-0.01-2')",
     )
 
     parser.add_argument(
