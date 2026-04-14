@@ -9,14 +9,10 @@ from src.data_processing.tools.raised_cosine import RaisedCosineWavelet
 
 
 PARAMS = {
-    'offset': 606028 - 20_000,
-    'duration': 2_000_000,
     'fs': 1.0,
     'img_height': 512,
     'f_min': 0.005,
     'f_max': 0.5,
-    'wavelet': "cmor100.0-1.0",
-    'transform': 'cwt_rc',
     'rc_fc': 1.0,
     'rc_B': 0.12,
     'rc_beta': 0.25,
@@ -33,17 +29,10 @@ def main() -> None:
         meta_file = input_file.replace(".sigmf-data", ".sigmf-meta")
         print(f"meta_file = {meta_file}")
 
-    if args.duration is not None:
-        PARAMS['duration'] = args.duration
-
-    if args.offset is not None:
-        PARAMS['offset'] = args.offset
-
-    if args.transfoType:
-        PARAMS['transform'] = args.transfoType
-
-    if args.waveletType:
-        PARAMS['wavelet'] = args.waveletType
+    PARAMS['duration'] = args.duration
+    PARAMS['offset'] = args.offset
+    PARAMS['transform'] = args.transfoType
+    PARAMS['wavelet'] = args.waveletType
 
     output_dir = str(args.output)
     loaders.ensure_dir(output_dir)
