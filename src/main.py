@@ -34,6 +34,7 @@ def main() -> None:
     PARAMS['offset'] = args.offset
     PARAMS['transform'] = args.transfoType
     PARAMS['wavelet'] = args.waveletType
+    PARAMS['input_file'] = input_file
     print_transformation_params(PARAMS)
 
     output_dir = str(args.output)

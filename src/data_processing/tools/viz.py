@@ -9,22 +9,22 @@ import cv2
 from .dsp import freq_to_pixel_linear
 
 
-def _resolve_wavelet_output_dir(output_dir, params):
-    if params.get('transform') != 'cwt':
-        return output_dir
+def _resolve_example_output_dir(output_dir, params):
+    input_file = params.get('input_file', '')
+    input_name = os.path.basename(input_file)
+    match = re.search(r"(ex\d+)", input_name)
 
-    wavelet_name = params.get('wavelet', '')
-    match = re.match(r"[A-Za-z]+", wavelet_name)
     if not match:
+        os.makedirs(output_dir, exist_ok=True)
         return output_dir
 
-    wavelet_dir = os.path.join(output_dir, match.group(0))
-    os.makedirs(wavelet_dir, exist_ok=True)
-    return wavelet_dir
+    example_dir = os.path.join(output_dir, "ex", match.group(1))
+    os.makedirs(example_dir, exist_ok=True)
+    return example_dir
 
 def resolve_wavelet_name(params):
     if params['transform'] == 'cwt_rc':
-        return "Raised Cosine"
+        return "Raised_Cosine"
     if params['transform'] == 'cwt':
         return params['wavelet']
     return "Wavelet"
@@ -32,7 +32,7 @@ def resolve_wavelet_name(params):
 def build_output_path(output_dir, params, timestamp, extension=".png"):
     wavelet_name = resolve_wavelet_name(params)
     filename = f"{wavelet_name}_{timestamp}{extension}"
-    target_output_dir = _resolve_wavelet_output_dir(output_dir, params)
+    target_output_dir = _resolve_example_output_dir(output_dir, params)
     return os.path.join(target_output_dir, filename)
 
 def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, params, timestamp=None):
