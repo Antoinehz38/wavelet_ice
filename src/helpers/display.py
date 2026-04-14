@@ -1,4 +1,5 @@
 def print_transformation_params(params: dict) -> None:
+    print()
     print("--------------------------------")
     print("Parametres transformation :")
     print("--------------------------------")
@@ -7,3 +8,4 @@ def print_transformation_params(params: dict) -> None:
     print(f"Transform : {params['transform']}")
     print(f"Wavelet   : {params['wavelet']}")
     print("--------------------------------")
+    print()
