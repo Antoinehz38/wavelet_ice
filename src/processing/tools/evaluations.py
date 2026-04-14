@@ -1,4 +1,10 @@
+from __future__ import annotations
+
 import numpy as np
+from typing import List, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.cwt_scheduler import TimeWindow
 
 
 def compute_iou(box_a, box_b):
@@ -101,3 +107,142 @@ def evaluate_coco_style(pred_boxes, gt_boxes):
     print(f"FINAL SCORE (mF1 @ .50:.95) : {avg_f1:.4f}\n")
 
     return avg_f1, results
+
+
+# ---------------------------------------------------------------------------
+# Merging boxes from multiple analysis windows
+# ---------------------------------------------------------------------------
+
+
+def _pixel_to_global(
+    boxes: list,
+    win_start: int,
+    win_length: int,
+    img_w: int,
+) -> List[Tuple[float, float, float, float]]:
+    """Convert pixel-space boxes to global sample coordinates (x-axis only).
+
+    The y-axis (frequency) is kept in pixel space since it is consistent
+    across all windows.
+
+    Parameters
+    ----------
+    boxes : list of (x, y, w, h) or (x, y, w, h, label)
+        Detected boxes in pixel coordinates of the compressed image.
+    win_start : int
+        First sample index of the time window.
+    win_length : int
+        Length of the time window in samples.
+    img_w : int
+        Width (in pixels) of the compressed image.
+
+    Returns
+    -------
+    List of (x_global, y, w_global, h [, label])
+        Boxes expressed in global sample coordinates for x, pixel coords for y.
+    """
+    scale_x = win_length / img_w  # samples per pixel
+    global_boxes = []
+    for box in boxes:
+        x, y, w, h = box[:4]
+        x_global = win_start + x * scale_x
+        w_global = w * scale_x
+        entry = (x_global, y, w_global, h)
+        if len(box) > 4:
+            entry = (*entry, box[4])
+        global_boxes.append(entry)
+    return global_boxes
+
+
+def _boxes_overlap(a, b, iou_threshold: float = 0.0) -> bool:
+    """Check if two boxes overlap enough to be merged.
+
+    When *iou_threshold* is 0 any intersection is enough.
+    Boxes format: (x, y, w, h [, …]).
+    """
+    if iou_threshold <= 0.0:
+        # Simple overlap check
+        xa1, ya1, xa2, ya2 = a[0], a[1], a[0] + a[2], a[1] + a[3]
+        xb1, yb1, xb2, yb2 = b[0], b[1], b[0] + b[2], b[1] + b[3]
+        return xa1 < xb2 and xa2 > xb1 and ya1 < yb2 and ya2 > yb1
+    else:
+        return compute_iou(a, b) >= iou_threshold
+
+
+def _union_box(a, b) -> Tuple[float, float, float, float]:
+    """Return the bounding box that encloses both *a* and *b*."""
+    x1 = min(a[0], b[0])
+    y1 = min(a[1], b[1])
+    x2 = max(a[0] + a[2], b[0] + b[2])
+    y2 = max(a[1] + a[3], b[1] + b[3])
+    return (x1, y1, x2 - x1, y2 - y1)
+
+
+def merge_boxes(
+    window_boxes: List[Tuple[list, "TimeWindow", int]],
+    iou_threshold: float = 0.0,
+) -> List[Tuple[float, float, float, float]]:
+    """Merge detection boxes coming from multiple analysis windows.
+
+    Each element of *window_boxes* is a tuple::
+
+        (boxes, time_window, img_w)
+
+    where
+    * **boxes** – list of ``(x, y, w, h)`` in compressed-image pixel coords,
+    * **time_window** – a :class:`TimeWindow` (needs ``.start`` and ``.length``),
+    * **img_w** – width in pixels of the compressed spectrogram for that window.
+
+    The function:
+
+    1. Converts every box to **global sample coordinates** (x-axis) so that
+       boxes from different windows share the same reference frame.
+    2. Iteratively merges boxes that overlap (controlled by *iou_threshold*).
+
+    Parameters
+    ----------
+    window_boxes : list of (boxes, TimeWindow, img_w)
+        Detection results per window.
+    iou_threshold : float, optional
+        Minimum IoU to consider two boxes as overlapping.
+        ``0.0`` (default) merges any pair that has **any** intersection.
+
+    Returns
+    -------
+    List of (x, y, w, h) in global sample coordinates (x) and pixel coords (y).
+    """
+    # 1. Collect all boxes in a single global coordinate system
+    all_global: List[Tuple[float, float, float, float]] = []
+    for boxes, tw, img_w in window_boxes:
+        converted = _pixel_to_global(boxes, tw.start, tw.length, img_w)
+        all_global.extend([(b[0], b[1], b[2], b[3]) for b in converted])
+
+    if not all_global:
+        return []
+
+    # 2. Greedy iterative merge until stable
+    merged = list(all_global)
+    changed = True
+    while changed:
+        changed = False
+        new_merged = []
+        used = [False] * len(merged)
+
+        for i in range(len(merged)):
+            if used[i]:
+                continue
+            current = merged[i]
+            for j in range(i + 1, len(merged)):
+                if used[j]:
+                    continue
+                if _boxes_overlap(current, merged[j], iou_threshold):
+                    current = _union_box(current, merged[j])
+                    used[j] = True
+                    changed = True
+            new_merged.append(current)
+            used[i] = True
+
+        merged = new_merged
+
+    print(f"[merge_boxes] {len(all_global)} boxes → {len(merged)} after merge")
+    return merged

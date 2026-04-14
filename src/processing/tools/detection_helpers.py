@@ -342,7 +342,7 @@ def extract_signals_curvefit(freq_profile, base_f_min, base_f_max, current_f_min
             return base_f_max, current_f_max
         else:
             return current_f_min, base_f_min
-
+        
 def merge_precise_detections(refined_detections, smoothed_spectrogram, tolerance=15, split_threshold=30):
     """Merge detections, with mathematical footprint subtraction for overlapping signals."""
     finished_boxes = []
@@ -352,10 +352,12 @@ def merge_precise_detections(refined_detections, smoothed_spectrogram, tolerance
         next_active_boxes = []
         used_detections = set()
         
-        # Récupération du profil d'intensité RÉEL pour cette fenêtre temporelle
+        # Profil actuel pour les ajouts, et profil PRÉCÉDENT pour les disparitions
         freq_profile = smoothed_spectrogram[:, i]
+        prev_freq_profile = smoothed_spectrogram[:, max(0, i-1)] 
         
-        current_window_dets = list(window_detections)
+        # Copie locale des dictionnaires pour pouvoir les découper (modifier) en direct
+        current_window_dets = [dict(d) for d in window_detections]
 
         for active_box in active_boxes:
             match_found = False
@@ -385,34 +387,55 @@ def merge_precise_detections(refined_detections, smoothed_spectrogram, tolerance
                     break
                     
                 elif bottom_matches and not top_matches:
-                    # Le bas correspond, mais le haut a grandi -> Un signal s'est superposé au-dessus
-                    if (det['f_max'] - last_f_max) >= split_threshold:
-                        
-                        # --- MÉTHODE 2 : Ajustement mathématique (Curve Fitting) ---
+                    diff_top = det['f_max'] - last_f_max
+                    
+                    if diff_top >= split_threshold:
+                        # --- SIGNAL S'AJOUTE EN BAS ---
                         new_f_min, new_f_max = extract_signals_curvefit(
                             freq_profile, last_f_min, last_f_max, det['f_min'], det['f_max']
                         )
                         
-                        # On verrouille le signal de base (il continue en dessous)
                         active_box['global_t_max'] = max(active_box['global_t_max'], det['t_max'])
                         active_box['global_f_min'] = min(active_box['global_f_min'], det['f_min'])
                         active_box['last_f_min'] = det['f_min']
                         active_box['last_f_max'] = last_f_max 
                         
                         next_active_boxes.append(active_box)
-                        used_detections.add(j)
                         match_found = True
                         
-                        # On injecte le nouveau signal isolé pour qu'il crée sa propre boîte
-                        current_window_dets.append({
-                            't_min': det['t_min'],
-                            't_max': det['t_max'],
-                            'f_min': new_f_min, 
-                            'f_max': new_f_max
-                        })
+                        # On découpe la détection : on laisse le reste libre pour qu'il devienne une nouvelle boîte
+                        det['f_min'] = new_f_min
+                        det['f_max'] = new_f_max
+                        # IMPORTANT: On n'ajoute PAS 'j' à used_detections !
                         break
+                        
+                    elif diff_top <= -split_threshold:
+                        # --- SIGNAL S'ARRÊTE EN BAS ---
+                        # On cherche la bordure dans la frame PRÉCÉDENTE (là où le signal existait encore)
+                        dropped_f_min, dropped_f_max = extract_signals_curvefit(
+                            prev_freq_profile, det['f_min'], det['f_max'], last_f_min, last_f_max
+                        )
+                        
+                        finished_boxes.append({
+                            'global_t_min': active_box['global_t_min'],
+                            'global_t_max': active_box['global_t_max'], 
+                            'global_f_min': dropped_f_min,              
+                            'global_f_max': active_box['global_f_max'],
+                            'last_f_min': dropped_f_min,
+                            'last_f_max': active_box['last_f_max']
+                        })
+                        
+                        active_box['global_t_max'] = max(active_box['global_t_max'], det['t_max'])
+                        active_box['global_f_max'] = det['f_max'] 
+                        active_box['last_f_min'] = det['f_min']
+                        active_box['last_f_max'] = det['f_max']
+                        
+                        next_active_boxes.append(active_box)
+                        used_detections.add(j)
+                        match_found = True
+                        break
+                        
                     else:
-                        # Petit mouvement (Tolérance < X < Split) : On étire
                         active_box['global_t_max'] = max(active_box['global_t_max'], det['t_max'])
                         active_box['global_f_max'] = max(active_box['global_f_max'], det['f_max'])
                         active_box['last_f_min'] = det['f_min']
@@ -423,34 +446,54 @@ def merge_precise_detections(refined_detections, smoothed_spectrogram, tolerance
                         break
 
                 elif top_matches and not bottom_matches:
-                    # Le haut correspond, mais le bas a grandi -> Un signal s'est superposé en-dessous
-                    if (last_f_min - det['f_min']) >= split_threshold:
-                        
-                        # --- MÉTHODE 2 : Ajustement mathématique (Curve Fitting) ---
+                    diff_bottom = last_f_min - det['f_min']
+                    
+                    if diff_bottom >= split_threshold:
+                        # --- SIGNAL S'AJOUTE EN HAUT ---
                         new_f_min, new_f_max = extract_signals_curvefit(
                             freq_profile, last_f_min, last_f_max, det['f_min'], det['f_max']
                         )
                         
-                        # On verrouille le signal de base (il continue au-dessus)
                         active_box['global_t_max'] = max(active_box['global_t_max'], det['t_max'])
                         active_box['global_f_max'] = max(active_box['global_f_max'], det['f_max'])
                         active_box['last_f_max'] = det['f_max']
                         active_box['last_f_min'] = last_f_min 
                         
                         next_active_boxes.append(active_box)
-                        used_detections.add(j)
                         match_found = True
                         
-                        # On injecte le nouveau signal isolé
-                        current_window_dets.append({
-                            't_min': det['t_min'],
-                            't_max': det['t_max'],
-                            'f_min': new_f_min,
-                            'f_max': new_f_max
-                        })
+                        # On découpe la détection en direct
+                        det['f_min'] = new_f_min
+                        det['f_max'] = new_f_max
                         break
+                        
+                    elif diff_bottom <= -split_threshold:
+                        # --- SIGNAL S'ARRÊTE EN HAUT ---
+                        # On cherche la bordure dans la frame PRÉCÉDENTE
+                        dropped_f_min, dropped_f_max = extract_signals_curvefit(
+                            prev_freq_profile, det['f_min'], det['f_max'], last_f_min, last_f_max
+                        )
+                        
+                        finished_boxes.append({
+                            'global_t_min': active_box['global_t_min'],
+                            'global_t_max': active_box['global_t_max'], 
+                            'global_f_min': active_box['global_f_min'],
+                            'global_f_max': dropped_f_max,              
+                            'last_f_min': active_box['last_f_min'],
+                            'last_f_max': dropped_f_max
+                        })
+                        
+                        active_box['global_t_max'] = max(active_box['global_t_max'], det['t_max'])
+                        active_box['global_f_min'] = det['f_min'] 
+                        active_box['last_f_min'] = det['f_min']
+                        active_box['last_f_max'] = det['f_max']
+                        
+                        next_active_boxes.append(active_box)
+                        used_detections.add(j)
+                        match_found = True
+                        break
+                        
                     else:
-                        # Petit mouvement : On étire
                         active_box['global_t_max'] = max(active_box['global_t_max'], det['t_max'])
                         active_box['global_f_min'] = min(active_box['global_f_min'], det['f_min'])
                         active_box['last_f_min'] = det['f_min']
@@ -463,7 +506,7 @@ def merge_precise_detections(refined_detections, smoothed_spectrogram, tolerance
             if not match_found:
                 finished_boxes.append(active_box)
 
-        # Les signaux restants (dont ceux qu'on vient d'extraire par soustraction !) démarrent de nouvelles boîtes
+        # Les détections restantes (incluant celles qui viennent d'être "découpées") démarrent de nouvelles boîtes
         for j in range(len(current_window_dets)):
             if j not in used_detections:
                 det = current_window_dets[j]
@@ -489,6 +532,7 @@ def merge_precise_detections(refined_detections, smoothed_spectrogram, tolerance
         final_boxes.append((bx0, by0, bx1 - bx0, by1 - by0))
 
     return final_boxes
+
 
 def refine_temporal_borders(original_image, detections_list, delta_t, time_threshold=20, time_smoothing=0.1):
     """Refine temporal borders of each detection by inspecting the original signal."""
@@ -552,7 +596,7 @@ PARAMS = {
 }
 
 if __name__ == "__main__":
-    file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/spectrogram_20260414_093738.png"
+    file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/spectrogram_20260414_093653.png"
     compressed_spec = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
     filename = file_path.split("/")[-1].replace(".png", "")
     mean_spec = temporal_mean_spectrogram(compressed_spec, delta_t=100)
