@@ -1,7 +1,7 @@
 import os
 
 from src.compute_signal import run_signal_processing_pipeline
-from src.cwt_scheduler import build_cwt_windows_from_annotations
+from src.cwt_scheduler import build_transition_windows
 from src.helpers.parser import parse_args
 from src.processing.tools.loaders import ensure_dir, load_metadata
 
@@ -68,9 +68,9 @@ def main()->None:
                 input_file = os.path.join(input_folder, file)
                 meta = load_metadata(input_file.replace(".sigmf-data", ".sigmf-meta"))
                 annotations = meta.get("annotations", []) if meta else []
-                windows = build_cwt_windows_from_annotations(
+                windows = build_transition_windows(
                             annotations=annotations,
-                            points_per_window=PARAMS['points_per_window'],
+                            window_size=PARAMS['points_per_window'],
                             global_start=PARAMS['offset'],
                             global_end=PARAMS['offset'] + PARAMS['duration'],
                         )
@@ -87,9 +87,9 @@ def main()->None:
     meta = load_metadata(meta_file)
 
     annotations = meta.get("annotations", []) if meta else []
-    windows = build_cwt_windows_from_annotations(
+    windows = build_transition_windows(
         annotations=annotations,
-        points_per_window=PARAMS['points_per_window'],
+        window_size=PARAMS['points_per_window'],
         global_start=PARAMS['offset'],
         global_end=PARAMS['offset'] + PARAMS['duration'],
     )
