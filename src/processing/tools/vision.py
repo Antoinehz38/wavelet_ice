@@ -14,7 +14,7 @@ from src.processing.tools.detection_helpers import (
 def detect_box(image, delta_t=100,
                smoothing_intensity=0.015,
                detection_threshold=25,
-               refinement_threshold=20,
+               refinement_threshold=5,
                refinement_smoothing=0.1,
                roll_off_threshold=0.10):
     F, T = image.shape
