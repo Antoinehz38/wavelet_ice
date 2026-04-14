@@ -22,7 +22,7 @@ def _resolve_wavelet_output_dir(output_dir, params):
     os.makedirs(wavelet_dir, exist_ok=True)
     return wavelet_dir
 
-def _resolve_wavelet_name(params):
+def resolve_wavelet_name(params):
     if params['transform'] == 'cwt_rc':
         return "Raised Cosine"
     if params['transform'] == 'cwt':
@@ -30,7 +30,7 @@ def _resolve_wavelet_name(params):
     return "Wavelet"
 
 def build_output_path(output_dir, params, timestamp, extension=".png"):
-    wavelet_name = _resolve_wavelet_name(params)
+    wavelet_name = resolve_wavelet_name(params)
     filename = f"{wavelet_name}_{timestamp}{extension}"
     target_output_dir = _resolve_wavelet_output_dir(output_dir, params)
     return os.path.join(target_output_dir, filename)
@@ -39,7 +39,7 @@ def save_viz_comparison(spectrogram, meta_data, detected_boxes, output_dir, para
     """
     Sauvegarde l'image avec axes physiques (Hz) et comparaison BBox.
     """
-    wavelet_name = _resolve_wavelet_name(params)
+    wavelet_name = resolve_wavelet_name(params)
     offset = params.get('offset', 0)
 
     if timestamp is None:
