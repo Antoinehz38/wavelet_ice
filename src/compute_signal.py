@@ -1,40 +1,44 @@
-import os, cv2, datetime
-import numpy as np
-from dataclasses import dataclass
-from src.data_processing.tools.viz import save_viz_comparison, compress_spectrogram
-from src.data_processing.tools import evaluations, dsp, vision, dsp_rc
-from src.data_processing.tools.raised_cosine import RaisedCosineWavelet
+import os
+import datetime
 
-from src.data_processing.tools.loaders import load_iq_data
+import cv2
+
 from src.cwt_scheduler import TimeWindow
+from src.processing.tools.dsp import compute_dual_linear_cwt, freq_to_pixel_linear
+from src.processing.tools.dsp_rc import compute_dual_linear_cwt_rc
+from src.processing.tools.evaluations import evaluate_coco_style
+from src.processing.tools.loaders import load_iq_data
+from src.processing.tools.raised_cosine import RaisedCosineWavelet
+from src.processing.tools.vision import detect_box
+from src.processing.tools.viz import save_viz_comparison, compress_spectrogram
 
 
 def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str, time_window: TimeWindow, params: dict) -> None:
-    # Bornes absolues de la fenêtre temporelle courante
+    # Absolute bounds of the current time window
     win_start = time_window.start
     win_end   = time_window.start + time_window.length
     sig = load_iq_data(input_file, num_samples=time_window.length, offset=time_window.start)
 
-    if sig is None: return None
+    if sig is None:
+        return None
 
     if params.get('transform', 'cwt') == 'cwt':
-        spec = dsp.compute_dual_linear_cwt(
+        spec = compute_dual_linear_cwt(
             sig, params['wavelet'], params['img_height'],
-            params['f_min'], params['f_max'], params['fs']
+            params['f_min'], params['f_max'], params['fs'],
         )
-
     elif params['transform'] == 'cwt_rc':
         rc = RaisedCosineWavelet(
             fc=params['rc_fc'],
             B=params['rc_B'],
-            beta=params['rc_beta']
+            beta=params['rc_beta'],
         )
-        spec = dsp_rc.compute_dual_linear_cwt_rc(
+        spec = compute_dual_linear_cwt_rc(
             sig, rc, params['img_height'],
-            params['f_min'], params['f_max'], params['fs']
+            params['f_min'], params['f_max'], params['fs'],
         )
     else:
-        raise ValueError("PARAMS['transform'] doit être 'cwt' ou 'cwt_rc'")
+        raise ValueError("params['transform'] must be 'cwt' or 'cwt_rc'")
 
 
     
@@ -49,16 +53,14 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
     boxes = []
     gt_boxes_pixels = []
     if params.get('addPrediction', False):
-        print("adding prediction ... ")
-       
-        boxes = vision.detect_box(compressed_spec, delta_t=100, intensite_lissage=0.015, roll_off_threshold=0.30)
-        print(f"-> {len(boxes)} objets détectés.")
+        print("Adding prediction...")
 
-        # Facteurs de conversion spectrogramme original -> image compressée
+        boxes = detect_box(compressed_spec, delta_t=100, smoothing_intensity=0.015, roll_off_threshold=0.30)
+        print(f"-> {len(boxes)} objects detected.")
+
         img_h, img_w = compressed_spec.shape[:2]
-        win_len = time_window.length  # nombre d'échantillons dans la fenêtre
+        win_len = time_window.length
 
-        # Ratios : échantillons/pixels → pixels compressés
         scale_x = img_w / win_len
         scale_y = img_h / params['img_height']
 
@@ -66,26 +68,22 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
         if meta:
             for ann in meta.get("annotations", []):
                 ann_start = ann['core:sample_start']
-                ann_end   = ann_start + ann['core:sample_count']
+                ann_end = ann_start + ann['core:sample_count']
 
-                # Ne garder que les annotations qui chevauchent la fenêtre courante
                 if ann_end <= win_start or ann_start >= win_end:
                     continue
 
-                y_start = dsp.freq_to_pixel_linear(ann['core:freq_upper_edge'], params['img_height'], params['f_max'])
-                y_end = dsp.freq_to_pixel_linear(ann['core:freq_lower_edge'], params['img_height'], params['f_max'])
+                y_start = freq_to_pixel_linear(ann['core:freq_upper_edge'], params['img_height'], params['f_max'])
+                y_end = freq_to_pixel_linear(ann['core:freq_lower_edge'], params['img_height'], params['f_max'])
 
-                # Sécurité bornes (dans le repère original)
                 y_start = max(y_start, 0)
-                y_end   = min(y_end, params['img_height'])
+                y_end = min(y_end, params['img_height'])
 
-                # Coordonnées X relatives à la fenêtre, clampées aux bords
                 x_rel = max(ann_start - win_start, 0)
-                x_end = min(ann_end,   win_end) - win_start
+                x_end = min(ann_end, win_end) - win_start
                 w = x_end - x_rel
                 h = y_end - y_start
 
-                # Conversion vers le repère de l'image compressée
                 cx = x_rel * scale_x
                 cw = w * scale_x
                 cy = y_start * scale_y
@@ -94,11 +92,10 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
                 label = ann.get('core:description', 'GT')
                 gt_boxes_pixels.append((cx, cy, cw, ch, label))
 
-        # --- 3c. Lancement Évaluation ---
         if len(gt_boxes_pixels) > 0:
-            evaluations.evaluate_coco_style(boxes, gt_boxes_pixels)
+            evaluate_coco_style(boxes, gt_boxes_pixels)
         else:
-            print("Pas de Vérité Terrain disponible pour l'évaluation.")
+            print("No ground truth available for evaluation.")
 
     # Generate filename for the visualization
     if params['transform'] == 'cwt_rc':

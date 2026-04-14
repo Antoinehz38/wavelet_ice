@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
-from src.data_processing.tools import loaders
+from src.processing.tools.loaders import load_metadata
 
 
 @dataclass
@@ -16,9 +16,9 @@ class TimeWindow:
 
 
 def _clip_interval(start: int, end: int, global_start: int, global_end: int) -> Tuple[int, int] | None:
-    """
-    Tronque [start, end) à l'intervalle global [global_start, global_end).
-    Retourne None si l'intersection est vide.
+    """Clip [start, end) to the global interval [global_start, global_end).
+
+    Returns None if the intersection is empty.
     """
     s = max(start, global_start)
     e = min(end, global_end)
@@ -32,12 +32,11 @@ def build_overlap_segments(
     global_start: int = 0,
     global_end: int | None = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Construit les segments temporels où l'ensemble des annotations actives est constant.
+    """Build time segments where the set of active annotations is constant.
 
-    Exemple :
-      si A=[10,50), B=[30,80)
-      => segments :
+    Example:
+      if A=[10,50), B=[30,80)
+      => segments:
          [10,30) : {A}
          [30,50) : {A,B}
          [50,80) : {B}
@@ -45,24 +44,24 @@ def build_overlap_segments(
     Parameters
     ----------
     annotations : list of dict
-        Liste des annotations SigMF.
+        List of SigMF annotations.
     global_start : int
-        Début du domaine temporel à considérer.
+        Start of the temporal domain to consider.
     global_end : int | None
-        Fin du domaine temporel à considérer. Si None, prend la fin max des annotations.
+        End of the temporal domain. If None, uses the max annotation end.
 
     Returns
     -------
     segments : list of dict
-        Chaque segment contient :
+        Each segment contains:
         - start
         - end
-        - active_annotations : indices des annotations actives
-        - descriptions : descriptions associées
+        - active_annotations: indices of active annotations
+        - descriptions: associated descriptions
     """
     events: List[Tuple[int, int, int]] = []
     # format event: (sample_index, kind, ann_idx)
-    # kind = +1 => début, kind = -1 => fin
+    # kind = +1 => start, kind = -1 => end
 
     max_end_seen = global_start
 
@@ -91,8 +90,7 @@ def build_overlap_segments(
     if global_end is None:
         global_end = max_end_seen
 
-    # Tri :
-    # à temps égal, on traite les fins avant les débuts pour respecter [start, end)
+    # Sort: at equal time, process ends before starts to respect [start, end)
     events.sort(key=lambda x: (x[0], x[1]))
 
     active = set()
@@ -104,7 +102,7 @@ def build_overlap_segments(
     while i < len(events):
         pos = events[i][0]
 
-        # Segment précédent si des annotations sont actives
+        # Previous segment if annotations are active
         if pos > current_pos and active:
             active_sorted = sorted(active)
             segments.append({
@@ -117,13 +115,13 @@ def build_overlap_segments(
                 ],
             })
 
-        # Consommer tous les événements à la même position
+        # Consume all events at the same position
         same_pos_events = []
         while i < len(events) and events[i][0] == pos:
             same_pos_events.append(events[i])
             i += 1
 
-        # fins d'abord (kind = -1), puis débuts (kind = +1)
+        # Ends first (kind = -1), then starts (kind = +1)
         for _, kind, ann_idx in same_pos_events:
             if kind == -1:
                 active.discard(ann_idx)
@@ -141,11 +139,9 @@ def split_segments_into_windows(
     points_per_window: int = 100_000,
     padding: int = 150_000,
 ) -> List[TimeWindow]:
-    """
-    Découpe chaque segment en fenêtres de taille <= points_per_window.
-    """
+    """Split each segment into windows of size <= points_per_window."""
     if points_per_window <= 0:
-        raise ValueError("points_per_window doit être > 0")
+        raise ValueError("points_per_window must be > 0")
 
     windows: List[TimeWindow] = []
 
@@ -159,8 +155,8 @@ def split_segments_into_windows(
         while cursor < end:
             w_end = min(cursor + points_per_window, end)
             windows.append(TimeWindow(
-                start=max(cursor- padding, 0),  # Optionnel : ajouter un padding avant la fenêtre pour le contexte
-                end=w_end+ padding,  # Optionnel : ajouter un padding après la fenêtre pour le contexte
+                start=max(cursor- padding, 0),
+                end=w_end+ padding,
                 length=w_end - max(cursor- padding, 0) + padding,
                 active_annotations=active_annotations,
                 descriptions=descriptions,
@@ -177,8 +173,8 @@ def build_cwt_windows_from_annotations(
     global_end: int | None = None,
 ) -> List[TimeWindow]:
     """
-    Pipeline complet :
-      annotations -> segments de chevauchement -> fenêtres de calcul CWT
+    Full pipeline:
+      annotations -> overlap segments -> CWT computation windows
     """
     segments = build_overlap_segments(
         annotations=annotations,
@@ -201,7 +197,7 @@ def build_cwt_windows_from_annotations(
 
 if __name__ == "__main__":
     meta_file = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/baseline/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-meta"
-    meta = loaders.load_metadata(meta_file)
+    meta = load_metadata(meta_file)
     annotations = meta.get("annotations", []) if meta else []
 
 
@@ -216,7 +212,7 @@ if __name__ == "__main__":
         global_start=PARAMS['offset'],
         global_end=PARAMS['offset'] + PARAMS['duration'],
     )
-    print(f"{len(windows)} fenêtres CWT à calculer.")
+    print(f"{len(windows)} CWT windows to compute.")
     for i, w in enumerate(windows):
         print(
             f"[{i}] start={w.start}, end={w.end}, len={w.length}, "

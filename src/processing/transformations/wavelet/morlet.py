@@ -13,7 +13,7 @@ FMAX = 0.5
 LOG_POWER = True
 EPS = 1e-12
 
-# ---- limiter au début: 4096 frames FFT ----
+# ---- limit to the first 4096 FFT frames ----
 NFFT = 512
 MAX_FRAMES = 4096
 NSAMP_LIMIT = NFFT * MAX_FRAMES   # <<< 2,097,152 samples
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     with open(META_PATH, "r") as f:
         meta = json.load(f)
     if meta["global"].get("core:datatype") != "cf32_le":
-        raise ValueError("Ce script suppose core:datatype == cf32_le")
+        raise ValueError("This script assumes core:datatype == cf32_le")
 
     fs = float(meta["global"].get("core:sample_rate", 1.0))
 
