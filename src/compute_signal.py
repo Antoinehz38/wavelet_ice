@@ -29,6 +29,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
     win_start = time_window.start
     win_end   = time_window.start + time_window.length
     sig = load_iq_data(input_file, num_samples=time_window.length, offset=time_window.start)
+    comput_time = 0
 
     if sig is None:
         return [], [], 0, 0
@@ -39,7 +40,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             sig, params['wavelet'], params['img_height'],
             params['f_min'], params['f_max'], params['fs'],
         )
-        print(f"CWT computation time: {time.time() - t:.2f} seconds")
+        comput_time = time.time() - t
     
     elif params['transform'] == 'cwt_rc':
         t = time.time()
@@ -52,9 +53,10 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             sig, rc, params['img_height'],
             params['f_min'], params['f_max'], params['fs'],
         )
-        print(f"Raised-cosine CWT computation time: {time.time() - t:.2f} seconds")
+        comput_time = time.time() - t
         
     elif params['transform'] == 'stft':
+        t = time.time()
         spec = compute_stft_scalogram(
             iq_data=sig,
             total_height=params['img_height'],
@@ -66,8 +68,10 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             nfft=params['stft_nfft'],
             window=params['stft_window'],
         )
+        comput_time = time.time() - t
     
     elif params['transform'] == 'dtcwt':
+        t = time.time()
         spec = compute_dual_dtcwt_scalogram_dyadic(
             iq_data=sig,
             total_height=params['img_height'],
@@ -77,8 +81,10 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             top_db_per_band=40.0,
             resize_to_signal_len=params['dtcwt_resize_to_signal_len'],
         )
+        comput_time = time.time() - t
     
     elif params['transform'] == 'cwt_bump':
+        t = time.time()
         bump = BumpWavelet(
             fc=params['bump_fc'],
             B=params['bump_B']
@@ -91,8 +97,10 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             params['f_max'],
             params['fs']
         )
+        comput_time = time.time() - t
 
     elif params['transform'] == 'cwt_morse':
+        t = time.time()
         morse = MorseWavelet(
             beta=params['morse_beta'],
             gamma=params['morse_gamma']
@@ -105,12 +113,18 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             params['f_max'],
             params['fs']
         )
+        comput_time = time.time() - t
     
     else:
         raise ValueError("params['transform'] must be 'cwt', 'cwt_rc', 'stft', 'dtcwt', 'cwt_bump', or 'cwt_morse'")
 
 
-    
+    wavelet_name = resolve_wavelet_name(params)
+
+    time_file_name = f'{wavelet_name}_length_{time_window.length}.txt'
+    with open(os.path.join(output_dir, time_file_name), 'a') as f:
+        f.write(f"{comput_time},\n")
+
     compressed_spec = compress_spectrogram(spec, params['downsample_factor'])
 
     if params.get('saveRaw', False):

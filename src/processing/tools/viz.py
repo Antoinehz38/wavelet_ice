@@ -150,6 +150,12 @@ def resolve_wavelet_name(params):
         return "Raised_Cosine"
     if params['transform'] == 'cwt':
         return params['wavelet']
+    if params['transform'] == 'cwt_bump':
+        return "Bump"
+    if params['transform'] == 'cwt_morse':
+        return "Morse"
+    if params['transform'] == 'stft':
+        return "STFT"
     return "Wavelet"
 
 
