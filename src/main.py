@@ -77,7 +77,7 @@ def main()->None:
                         )
     
                 for w in windows:
-                    boxes, gt_boxes, img_w = run_signal_processing_pipeline(input_file, meta, output_dir, 
+                    boxes, gt_boxes, img_w, img_h = run_signal_processing_pipeline(input_file, meta, output_dir, 
                                                 time_window=w, params=PARAMS)
                     
 
@@ -101,17 +101,17 @@ def main()->None:
         print(
             f"[{i}] start={w.start}, end={w.end}, len={w.length}, "
             f"active={w.descriptions}")
-        boxes, gt_boxes, img_w = run_signal_processing_pipeline(input_file, meta, output_dir, 
+        boxes, gt_boxes, img_w, img_h = run_signal_processing_pipeline(input_file, meta, output_dir, 
                                                 time_window=w, params=PARAMS)
-        total_boxes.append((boxes, w, img_w))
+        total_boxes.append((boxes, w, img_w, img_h))
 
     # Merge all detected boxes into a single global prediction list
     merged = merge_boxes(total_boxes)
     print(f"\n=== Merged predictions: {len(merged)} boxes ===")
     for i, box in enumerate(merged):
         print(f"  [{i}] x={box[0]:.0f}, y={box[1]:.0f}, w={box[2]:.0f}, h={box[3]:.0f}")
-                    
 
+    
 if __name__ == "__main__":
     main()
 

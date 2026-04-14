@@ -13,14 +13,14 @@ from src.processing.tools.vision import detect_box
 from src.processing.tools.viz import save_viz_comparison, compress_spectrogram
 
 
-def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str, time_window: TimeWindow, params: dict) -> tuple[list, list, int]:
+def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str, time_window: TimeWindow, params: dict) -> tuple[list, list, int, int]:
     # Absolute bounds of the current time window
     win_start = time_window.start
     win_end   = time_window.start + time_window.length
     sig = load_iq_data(input_file, num_samples=time_window.length, offset=time_window.start)
 
     if sig is None:
-        return [], [], 0
+        return [], [], 0, 0
 
     if params.get('transform', 'cwt') == 'cwt':
         t = time.time()
@@ -52,7 +52,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"spectrogram_{timestamp}.png"
         cv2.imwrite(os.path.join(output_dir, filename), compressed_spec)
-        return [], [], compressed_spec.shape[1]
+        return [], [], compressed_spec.shape[1], compressed_spec.shape[0]
 
     boxes = []
     gt_boxes_pixels = []
@@ -117,4 +117,5 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
     save_viz_comparison(compressed_spec, gt_boxes_pixels, boxes, filepath, params)
 
     img_w = compressed_spec.shape[1]
-    return boxes, gt_boxes_pixels, img_w
+    img_h = compressed_spec.shape[0]
+    return boxes, gt_boxes_pixels, img_w, img_h
