@@ -273,12 +273,12 @@ def double_gaussian(x, a1, m1, s1, a2, m2, s2):
     """Somme de deux courbes en cloche qui se chevauchent."""
     return gaussian(x, a1, m1, s1) + gaussian(x, a2, m2, s2)
 
+
 def extract_signals_curvefit(freq_profile, base_f_min, base_f_max, current_f_min, current_f_max, rolloff_threshold=0.3):
     """
     Méthode 2: Ajustement mathématique (Curve Fitting).
     Force la reconnaissance de 2 cloches distinctes dans le profil fusionné.
     """
-    # On isole la zone large contenant les deux signaux
     pad = 20
     c_min = max(0, current_f_min - pad)
     c_max = min(len(freq_profile), current_f_max + pad)
@@ -290,46 +290,53 @@ def extract_signals_curvefit(freq_profile, base_f_min, base_f_max, current_f_min
         return current_f_max - (current_f_max - base_f_max), current_f_max
 
     # --- Hypothèses initiales pour aider l'algorithme ---
-    # Cloche 1 (L'ancien signal, on connait sa position)
     m1_guess = (base_f_min + base_f_max) / 2.0
     s1_guess = max(2.0, (base_f_max - base_f_min) / 4.0)
     a1_guess = np.max(freq_profile[base_f_min:base_f_max]) if base_f_max > base_f_min else 100.0
 
-    # Cloche 2 (Le nouveau signal qui vient d'apparaître)
+    # Cloche 2 (Le nouveau signal)
     if current_f_max > base_f_max: # Empilement par le HAUT
         m2_guess = (base_f_max + current_f_max) / 2.0
         s2_guess = max(2.0, (current_f_max - base_f_max) / 4.0)
         search_area = freq_profile[base_f_max:current_f_max]
         a2_guess = np.max(search_area) if len(search_area) > 0 else 100.0
-        # On force la 2ème cloche à rester dans la partie haute !
+        
+        # On utilise np.inf pour ne pas brider arbitrairement l'amplitude (260) ou l'écart-type (100)
         bounds = (
-            [0, base_f_min - 10, 1, 0, base_f_max, 1], # Limites basses [a1, m1, s1, a2, m2, s2]
-            [260, base_f_max + 10, 100, 260, current_f_max + 10, 100]  # Limites hautes
+            [0, base_f_min - 10, 1, 0, base_f_max, 1], 
+            [np.inf, base_f_max + 10, np.inf, np.inf, current_f_max + 10, np.inf] 
         )
-    else: # Empilement par le BAS
+    else: # Empilement par le BAS (ou signal englobé)
         m2_guess = (current_f_min + base_f_min) / 2.0
         s2_guess = max(2.0, (base_f_min - current_f_min) / 4.0)
         search_area = freq_profile[current_f_min:base_f_min]
         a2_guess = np.max(search_area) if len(search_area) > 0 else 100.0
-        # On force la 2ème cloche à rester dans la partie basse !
+        
+        # Protection : Si le signal est "englobé", current_f_min - 10 peut être supérieur à base_f_min,
+        # ce qui ferait planter les bounds (lower > upper). On force le max avec min().
+        lower_m2 = min(current_f_min - 10, base_f_min - 1)
+        
         bounds = (
-            [0, base_f_min - 10, 1, 0, current_f_min - 10, 1],
-            [260, base_f_max + 10, 100, 260, base_f_min, 100]
+            [0, base_f_min - 10, 1, 0, lower_m2, 1],
+            [np.inf, base_f_max + 10, np.inf, np.inf, base_f_min, np.inf]
         )
 
     p0 = [a1_guess, m1_guess, s1_guess, a2_guess, m2_guess, s2_guess]
 
+    # --- CORRECTION DE SÉCURITÉ ICI ---
+    # np.clip force chaque valeur de p0 à rester strictement à l'intérieur des limites de 'bounds'.
+    # Cela élimine 100% des erreurs "Initial guess is outside of provided bounds".
+    p0 = np.clip(p0, bounds[0], bounds[1])
+
     try:
         import warnings
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore") # Ignore les warnings d'optimisation
-            # Fit magique de scipy
+            warnings.simplefilter("ignore")
+            # Fit de scipy
             popt, _ = curve_fit(double_gaussian, x_data, y_data, p0=p0, bounds=bounds, maxfev=1000)
             
-        a1, m1, s1, a2, m2, s2 = popt # On récupère les paramètres des 2 cloches
+        a1, m1, s1, a2, m2, s2 = popt
         
-        # On calcule mathématiquement la largeur du nouveau signal (cloche 2)
-        # en utilisant son écart-type (s2), peu importe ce qu'il y a en dessous !
         spread = s2 * np.sqrt(-2 * np.log(rolloff_threshold))
         new_f_min = max(0, int(m2 - spread))
         new_f_max = min(len(freq_profile)-1, int(m2 + spread))
@@ -337,7 +344,6 @@ def extract_signals_curvefit(freq_profile, base_f_min, base_f_max, current_f_min
         return new_f_min, new_f_max
 
     except RuntimeError:
-        # Fallback géométrique de secours si le fit échoue
         if current_f_max > base_f_max:
             return base_f_max, current_f_max
         else:
