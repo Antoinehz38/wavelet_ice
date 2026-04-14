@@ -50,8 +50,8 @@ def main()->None:
     PARAMS['transform'] = args.transfoType
     PARAMS['wavelet'] = args.waveletType
     PARAMS['downsample_factor'] = args.downSizeFactor
-    PARAMS['saveRaw'] = True
-    PARAMS['addPrediction'] = True
+    PARAMS['saveRaw'] = args.saveRaw
+    PARAMS['addPrediction'] = args.addPrediction
     PARAMS['points_per_window'] = args.pointsPerWindow
     PARAMS['input_file'] = input_file
 
