@@ -10,23 +10,31 @@ def generate_linear_scales_rc(f_min, f_max, num_pixels, wavelet: RaisedCosineWav
     scales = (fc * fs) / freqs_linear
     return scales
 
-
 def cwt_fft(x: np.ndarray, scales: np.ndarray, wavelet: RaisedCosineWavelet, fs=1.0):
-    """CWT via FFT: W(s,t) = ifft( FFT(x) * conj(Psi_s(f)) ).
-
-    Returns complex coefficients of shape (n_scales, N).
-    """
     x = np.asarray(x)
     N = x.shape[0]
 
-    fgrid = np.fft.fftfreq(N, d=1.0 / fs)
+    # --- 1. ZERO PADDING ---
+    pad = N // 2  # simple et efficace
+    xpad = np.pad(x, (pad, pad), mode="constant")
 
-    X = np.fft.fft(x)
+    Npad = xpad.shape[0]
+
+    # Nouvelle grille fréquentielle
+    fgrid = np.fft.fftfreq(Npad, d=1.0 / fs)
+
+    # FFT du signal paddé
+    X = np.fft.fft(xpad)
+
     coefs = np.empty((len(scales), N), dtype=np.complex64)
 
     for i, s in enumerate(scales):
         Psi_s = wavelet.psi_scaled_on_grid(fgrid, scale=float(s))
-        coefs[i, :] = np.fft.ifft(X * np.conj(Psi_s)).astype(np.complex64)
+
+        conv = np.fft.ifft(X * np.conj(Psi_s))
+
+        # --- 2. RECADRAGE ---
+        coefs[i, :] = conv[pad:pad + N]
 
     return coefs
 
