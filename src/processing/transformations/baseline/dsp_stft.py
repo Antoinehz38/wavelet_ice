@@ -1,11 +1,13 @@
 import numpy as np
 from scipy.signal import stft
 from scipy.ndimage import zoom
+import cv2
 
 
 def _resize_freq_axis(spec: np.ndarray, target_height: int) -> np.ndarray:
     """
-    Redimensionne uniquement l'axe fréquentiel d'une matrice 2D (freq, temps).
+    Redimensionne uniquement l'axe fréquentiel d'une matrice 2D (freq, temps)
+    avec OpenCV.
     """
     if spec.ndim != 2:
         raise ValueError("spec doit être une matrice 2D (freq, temps).")
@@ -17,12 +19,18 @@ def _resize_freq_axis(spec: np.ndarray, target_height: int) -> np.ndarray:
     if h <= 0 or w <= 0:
         raise ValueError("Dimensions invalides pour le redimensionnement.")
 
-    return zoom(spec, (target_height / h, 1.0), order=1)
+    resized = cv2.resize(
+        spec.astype(np.float32),
+        (w, target_height),
+        interpolation=cv2.INTER_LINEAR
+    )
+    return resized
 
 
 def _resize_time_axis(spec: np.ndarray, target_width: int) -> np.ndarray:
     """
-    Redimensionne uniquement l'axe temporel d'une matrice 2D (freq, temps).
+    Redimensionne uniquement l'axe temporel d'une matrice 2D (freq, temps)
+    avec OpenCV.
     """
     if spec.ndim != 2:
         raise ValueError("spec doit être une matrice 2D (freq, temps).")
@@ -34,7 +42,12 @@ def _resize_time_axis(spec: np.ndarray, target_width: int) -> np.ndarray:
     if h <= 0 or w <= 0:
         raise ValueError("Dimensions invalides pour le redimensionnement.")
 
-    return zoom(spec, (1.0, target_width / w), order=1)
+    resized = cv2.resize(
+        spec.astype(np.float32),
+        (target_width, h),
+        interpolation=cv2.INTER_LINEAR
+    )
+    return resized
 
 
 def _power_to_db(power: np.ndarray, eps: float = 1e-12) -> np.ndarray:
