@@ -66,28 +66,29 @@ def main()->None:
         input_folder = str(args.runPipelineOnFolder)
         output_dir = str(args.output)
         ensure_dir(output_dir)
-        for transfo, wavelet in [['cwt',"cmor100.0-1.0"], 
+        
+        for file in os.listdir(input_folder):
+            if file.endswith(".sigmf-data"):
+                input_file = os.path.join(input_folder, file)
+                PARAMS['input_file'] = input_file
+                print(f"\nProcessing file: {input_file}")
+                meta = load_metadata(input_file.replace(".sigmf-data", ".sigmf-meta"))
+                annotations = meta.get("annotations", []) if meta else []
+                windows = build_transition_windows(
+                        annotations=annotations,
+                        window_size=PARAMS['points_per_window'],
+                        global_start=PARAMS['offset'],
+                        global_end=PARAMS['offset'] + PARAMS['duration'],
+                        )
+                for transfo, wavelet in [['cwt',"cmor100.0-1.0"], 
                                  ['cwt',"fbsp10-0.01-2"]]:
                                 #  ['cwt_rc', ''], 
                                 #  ['stft', ''], 
                                 #  ['cwt_bump', ''], 
                                 #  ['cwt_morse', '']]:
-            PARAMS['transform'] = transfo
-            if transfo == 'cwt':
-                PARAMS['wavelet'] = wavelet
-            for file in os.listdir(input_folder):
-                if file.endswith(".sigmf-data"):
-                    input_file = os.path.join(input_folder, file)
-                    PARAMS['input_file'] = input_file
-                    print(f"\nProcessing file: {input_file}")
-                    meta = load_metadata(input_file.replace(".sigmf-data", ".sigmf-meta"))
-                    annotations = meta.get("annotations", []) if meta else []
-                    windows = build_transition_windows(
-                            annotations=annotations,
-                            window_size=PARAMS['points_per_window'],
-                            global_start=PARAMS['offset'],
-                            global_end=PARAMS['offset'] + PARAMS['duration'],
-                            )
+                    PARAMS['transform'] = transfo
+                    if transfo == 'cwt':
+                        PARAMS['wavelet'] = wavelet
                     print_transformation_params(PARAMS)
     
                     print(f"{len(windows)} CWT windows to compute.")
