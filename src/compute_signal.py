@@ -5,10 +5,11 @@ import cv2
 
 from src.cwt_scheduler import TimeWindow
 from src.processing.tools.dsp import compute_dual_linear_cwt, freq_to_pixel_linear
-from src.processing.tools.dsp_rc import compute_dual_linear_cwt_rc
 from src.processing.tools.evaluations import evaluate_coco_style
 from src.processing.tools.loaders import load_iq_data
 from src.processing.tools.raised_cosine import RaisedCosineWavelet
+from src.processing.transformations.wavelet.dsp_rc import compute_dual_linear_cwt_rc
+from src.processing.transformations.baseline.dsp_stft import compute_stft_scalogram
 from src.processing.tools.vision import detect_box
 from src.processing.tools.viz import save_viz_comparison, compress_spectrogram
 
@@ -41,6 +42,19 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             params['f_min'], params['f_max'], params['fs'],
         )
         print(f"Raised-cosine CWT computation time: {time.time() - t:.2f} seconds")
+        
+    elif params['transform'] == 'stft':
+        spec = compute_stft_scalogram(
+            iq_data=sig,
+            total_height=params['img_height'],
+            fs=params['fs'],
+            f_min=params['f_min'],
+            f_max=params['f_max'],
+            nperseg=params['stft_nperseg'],
+            noverlap=params['stft_noverlap'],
+            nfft=params['stft_nfft'],
+            window=params['stft_window'],
+        )
     else:
         raise ValueError("params['transform'] must be 'cwt' or 'cwt_rc'")
 

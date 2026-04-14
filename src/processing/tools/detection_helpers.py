@@ -596,12 +596,12 @@ PARAMS = {
 }
 
 if __name__ == "__main__":
-    file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/spectrogram_20260414_093653.png"
+    file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/spectrogram_20260414_094036.png"
     compressed_spec = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
     filename = file_path.split("/")[-1].replace(".png", "")
     mean_spec = temporal_mean_spectrogram(compressed_spec, delta_t=100)
 
-    i = 26
+    i = 10
     smoothing_intensity = 0.015
     delta_t = 100
 
@@ -612,7 +612,7 @@ if __name__ == "__main__":
     )
 
     save_window_visualisation(
-        image=compressed_spec,
+        image=mean_spec,
         mean_spectrogram=smoothed_spec,
         delta_t=delta_t,
         i=i,
@@ -629,7 +629,7 @@ if __name__ == "__main__":
     gt_boxes_pixels = []
     if meta:
         for ann in meta.get("annotations", []):
-            if ann['core:sample_start'] < 2_000_000:
+            if ann['core:sample_start'] > 80_000_000 :
                 y_start = freq_to_pixel_linear(ann['core:freq_upper_edge'], PARAMS['img_height'], PARAMS['f_max'])
                 y_end = freq_to_pixel_linear(ann['core:freq_lower_edge'], PARAMS['img_height'], PARAMS['f_max'])
 

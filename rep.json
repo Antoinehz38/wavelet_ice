@@ -1,0 +1,55 @@
+{
+  "global": {
+    "core:sample_rate": 1.0,
+    "core:datatype": "cf32_le"
+  },
+  "captures": [
+    {
+      "core:sample_start": 0,
+      "core:sample_count": 100000000,
+      "core:frequency": 0.0
+    }
+  ],
+  "annotations": [
+    { "done": "PSK2",
+      "core:sample_start": 0,
+      "core:sample_count": 950000,
+      "core:description": "prediction",
+      "core:freq_lower_edge": -0.07999999999999996,
+      "core:freq_upper_edge": -0.01733333333333331,
+      "west:scale": 1.0
+    },
+    { "done": "FM",
+      "core:sample_start": 0,
+      "core:sample_count": 63643878,
+      "core:description": "prediction",
+      "core:freq_lower_edge": 0.43466666666666665,
+      "core:freq_upper_edge": 0.5,
+      "west:scale": 1.0
+    },
+    { "done": "OOK",
+      "core:sample_start": 0,
+      "core:sample_count": 79808410,
+      "core:description": "prediction",
+      "core:freq_lower_edge": -0.46199999999999997,
+      "core:freq_upper_edge": -0.384,
+      "west:scale": 1.0
+    },
+    { "done": "AM_SSB",
+      "core:sample_start": 750000,
+      "core:sample_count": 700000,
+      "core:description": "prediction",
+      "core:freq_lower_edge": -0.30466666666666664,
+      "core:freq_upper_edge": -0.2326666666666667,
+      "west:scale": 1.0
+    },
+    { "done": "PSK2",
+      "core:sample_start": 900000,
+      "core:sample_count": 54264375,
+      "core:description": "prediction",
+      "core:freq_lower_edge": 0.394,
+      "core:freq_upper_edge": 0.4726666666666667,
+      "west:scale": 1.0
+    }
+  ]
+}

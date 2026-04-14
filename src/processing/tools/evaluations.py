@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import numpy as np
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Tuple, TYPE_CHECKING, Dict, Any
 
-if TYPE_CHECKING:
-    from src.cwt_scheduler import TimeWindow
+
+from src.cwt_scheduler import TimeWindow
 
 
 def compute_iou(box_a, box_b):
@@ -113,168 +113,183 @@ def evaluate_coco_style(pred_boxes, gt_boxes):
 # Merging boxes from multiple analysis windows
 # ---------------------------------------------------------------------------
 
+def is_begin(box: tuple, w: TimeWindow, img_w: int, img_h: int, margin: int = 0) -> bool:
+    x, y, box_w, box_h = box
+    if x > margin:
+        return True
+    if w.start == 0:
+        return True
+        
+    return False
 
-def _pixel_to_global(
-    boxes: list,
-    win_start: int,
-    win_length: int,
-    img_w: int,
-    img_h: int,
-) -> List[Tuple[float, float, float, float]]:
-    """Convert pixel-space boxes to global coordinates.
+def is_end(box: tuple, w: TimeWindow, img_w: int, total_samples: int = 100_000_000, margin: int = 0) -> bool:
+    x, y, box_w, box_h = box
+    if (x + box_w) < (img_w - margin):
+        return True
+    if w.end >= total_samples:
+        return True
+    return False
 
-    * **x-axis** (time) → global sample index.
-    * **y-axis** (frequency) → normalised to [0, 1] so that boxes from
-      different windows (potentially with different image sizes) are
-      comparable.
+def pixel_to_sample(x: int, w_start: int, w_length: int, img_w: int) -> int:
+    """Convertit une coordonnée X en numéro de sample."""
+    samples_per_pixel = w_length / img_w
+    return w_start + int(x * samples_per_pixel)
 
-    Parameters
-    ----------
-    boxes : list of (x, y, w, h [, label])
-        Detected boxes in compressed-image pixel coordinates.
-    win_start : int
-        First sample index of the time window.
-    win_length : int
-        Length of the time window in samples.
-    img_w : int
-        Width (pixels) of the compressed spectrogram.
-    img_h : int
-        Height (pixels) of the compressed spectrogram.
-
-    Returns
-    -------
-    List of (x_global, y_norm, w_global, h_norm)
+def pixel_to_freq(y: int, h: int, img_h: int) -> Tuple[float, float]:
     """
-    scale_x = win_length / img_w   # samples per pixel (time)
-    scale_y = 1.0 / img_h          # normalised per pixel (freq)
-    global_boxes: List[Tuple[float, float, float, float]] = []
-    for box in boxes:
-        x, y, w, h = box[:4]
-        x_global = win_start + x * scale_x
-        w_global = w * scale_x
-        y_norm = y * scale_y
-        h_norm = h * scale_y
-        global_boxes.append((x_global, y_norm, w_global, h_norm))
-    return global_boxes
-
-
-def _freq_overlap(box_a, box_b, tolerance: float) -> bool:
-    """Check whether two boxes cover a similar frequency band.
-
-    Both boxes are expressed in normalised frequency coordinates
-    ``(x, y, w, h)`` where y and h are in [0, 1].
-
-    Two bands match when both edges are within *tolerance* of each other.
+    Convertit Y et la hauteur en fréquences normalisées [-0.5, 0.5].
+    Hypothèse : y=0 est le haut de l'image (+0.5), y=img_h est le bas (-0.5).
     """
-    ya_min, ya_max = box_a[1], box_a[1] + box_a[3]
-    yb_min, yb_max = box_b[1], box_b[1] + box_b[3]
-    return abs(ya_min - yb_min) <= tolerance and abs(ya_max - yb_max) <= tolerance
+    # y est le bord haut de la box (fréquence haute)
+    # y + h est le bord bas de la box (fréquence basse)
+    freq_upper = 0.5 - (y / img_h)
+    freq_lower = 0.5 - ((y + h) / img_h)
+    return freq_lower, freq_upper
+
+def generate_sigmf_annotations(
+    unitary_boxes: List[Tuple], 
+    matched_boxes: List[Tuple], 
+    default_scale: float = 1.0
+) -> Dict[str, Any]:
+    
+    annotations = []
+
+    for u_data in unitary_boxes:
+        box, w, img_w, img_h = u_data
+        desc = "prediction_unitary"
+        x, y, box_w, box_h = box
+        
+        start_sample = pixel_to_sample(x, w.start, w.length, img_w)
+        end_sample = pixel_to_sample(x + box_w, w.start, w.length, img_w)
+        
+        f_lower, f_upper = pixel_to_freq(y, box_h, img_h)
+        
+        annotations.append({
+            "core:sample_start": start_sample,
+            "core:sample_count": end_sample - start_sample,
+            "core:description": desc,
+            "core:freq_lower_edge": f_lower,
+            "core:freq_upper_edge": f_upper,
+            "west:scale": default_scale
+        })
+
+    for match in matched_boxes:
+        b_data, e_data = match
+        
+        box_b, w_b, img_w_b, img_h_b, = b_data
+        x_b, y_b, w_b_box, h_b = box_b
+        
+        box_e, w_e, img_w_e, img_h_e,= e_data
+        x_e, y_e, w_e_box, h_e = box_e
+        
+        start_sample = pixel_to_sample(x_b, w_b.start, w_b.length, img_w_b)
+        end_sample = pixel_to_sample(x_e + w_e_box, w_e.start, w_e.length, img_w_e)
+        
+        f_lower, f_upper = pixel_to_freq(y_b, h_b, img_h_b)
+        
+        annotations.append({
+            "core:sample_start": start_sample,
+            "core:sample_count": end_sample - start_sample,
+            "core:description": "prediction_merged",
+            "core:freq_lower_edge": f_lower,
+            "core:freq_upper_edge": f_upper,
+            "west:scale": default_scale
+        })
+
+    annotations = sorted(annotations, key=lambda a: a["core:sample_start"])
+
+    return {
+        "global": {
+            "core:sample_rate": 1.0,
+            "core:datatype": "cf32_le"
+        },
+        "captures": [
+            {
+                "core:sample_start": 0,
+                "core:sample_count": 100000000,
+                "core:frequency": 0.0
+            }
+        ],
+        "annotations": annotations
+    }
 
 
-def merge_boxes(
-    window_boxes: List[Tuple[list, "TimeWindow", int, int]],
-    freq_tolerance: float = 0.05,
-) -> List[Tuple[float, float, float, float]]:
-    """Merge detection boxes coming from multiple analysis windows.
+def merge_boxes(total_boxes: List[Tuple[List[tuple], TimeWindow, int, int]], margin: int = 5, freq_margin: int = 10) -> dict:
+    boxes_begin: List[Tuple[tuple, TimeWindow, int, int]] = []
+    boxes_end: List[Tuple[tuple, TimeWindow, int, int]] = []
+    boxes_unitary: List[Tuple[tuple, TimeWindow, int, int]] = []
+    boxes_middle: List[Tuple[tuple, TimeWindow, int, int]] = []
+    
+    # 1. Tri des boîtes
+    for boxes, w, img_w, img_h in total_boxes:
+        for box in boxes:
+            is_b = is_begin(box, w, img_w, img_h, margin)
+            # Attention: dans ton brouillon tu passais img_h au lieu de total_samples à is_end
+            is_e = is_end(box, w, img_w, total_samples=100_000_000, margin=margin)
+            
+            if is_b and is_e:
+                boxes_unitary.append((box, w, img_w, img_h))
+            elif is_b and not is_e:
+                boxes_begin.append((box, w, img_w, img_h))
+            elif not is_b and is_e:
+                boxes_end.append((box, w, img_w, img_h))
+            else:
+                # Signal qui traverse toute l'image de part en part
+                boxes_middle.append((box, w, img_w, img_h)) 
 
-    ``build_transition_windows`` produces windows centred on transition
-    points (moments where a signal starts or ends).  Each window yields
-    detected boxes in compressed pixel space.  The same physical signal
-    will therefore appear as a **start box** in one window and an **end
-    box** in a later window.
+    matched_boxes: List[Tuple[Tuple, Tuple]] = []
+    
+    available_ends = boxes_end.copy()
 
-    This function:
+    # 2. Matching des boîtes
+    for b_data in boxes_begin:
+        box_b, w_b, img_w_b, img_h_b = b_data
+        x_b, y_b, w_b_box, h_b = box_b
+        
+        best_match_idx = -1
+        
+        for i, e_data in enumerate(available_ends):
+            box_e, w_e, img_w_e, img_h_e = e_data
+            x_e, y_e, w_e_box, h_e = box_e
+            
+            # Condition 1 : La fenêtre de fin doit être après la fenêtre de début
+            if w_e.start >= w_b.end:
+                
+                # Condition 2 : Les fréquences doivent correspondre (Y et Hauteur)
+                y_match = abs(y_b - y_e) <= freq_margin
+                h_match = abs(h_b - h_e) <= freq_margin
+                
+                if y_match and h_match:
+                    # Match trouvé !
+                    matched_boxes.append((b_data, e_data))
+                    best_match_idx = i
+                    break # On a trouvé la suite, on arrête de chercher pour ce début
+        
+        # Si on a trouvé un match, on l'enlève de la liste des fins disponibles 
+        # pour éviter qu'une fin soit rattachée à plusieurs débuts
+        if best_match_idx != -1:
+            available_ends.pop(best_match_idx)
 
-    1. Converts every box from **compressed pixel coordinates** to
-       **global sample coordinates** (time) and **normalised frequency**
-       so that boxes from different windows share a common reference.
-    2. **Matches** boxes from different windows that share the same
-       frequency band (within *freq_tolerance*), treating them as the
-       same physical signal observed at its beginning and its end.
-    3. For each matched group the final box spans from the **earliest
-       detection** to the **latest detection** (i.e. the signal is
-       assumed present over the whole interval even though intermediate
-       samples were not computed).
+    # Je te retourne tout dans un dictionnaire pour que ce soit facile à explorer
+    dict_final={
+        "unitary": boxes_unitary,
+        "matched": matched_boxes,
+        "unmatched_begins": len(boxes_begin) - len(matched_boxes),
+        "unmatched_ends": len(available_ends),
+        "middles": boxes_middle
+    }
+    return generate_sigmf_annotations(unitary_boxes=boxes_unitary, matched_boxes=matched_boxes, default_scale=1.0)
 
-    Parameters
-    ----------
-    window_boxes : list of (boxes, TimeWindow, img_w, img_h)
-        Detection results per window.  *boxes* is a list of
-        ``(x, y, w, h)`` in compressed-image pixel coords.
-        *img_w* and *img_h* are the dimensions of the compressed
-        spectrogram used for detection.
-    freq_tolerance : float, optional
-        Maximum allowed difference (in normalised frequency, 0-1) between
-        the upper / lower edges of two boxes for them to be considered
-        the same signal.  Default ``0.05`` (5 % of the frequency axis).
 
-    Returns
-    -------
-    List of (x, y, w, h) in **global sample coordinates** (time) and
-    **normalised frequency** [0, 1] (freq).
-    """
-    if not window_boxes:
-        return []
 
-    # ------------------------------------------------------------------
-    # 1.  Convert every box to global (sample, norm-freq) coordinates
-    #     and tag it with its source window index.
-    # ------------------------------------------------------------------
-    tagged_boxes: List[Tuple[Tuple[float, float, float, float], int]] = []
-    for win_idx, (boxes, tw, img_w, img_h) in enumerate(window_boxes):
-        if not boxes or img_w == 0:
-            continue
-        converted = _pixel_to_global(boxes, tw.start, tw.length, img_w, img_h)
-        for gb in converted:
-            tagged_boxes.append((gb, win_idx))
+if __name__ == '__main__':
+    total_boxes = [([(np.int64(0), np.int64(776), np.int64(1900), np.int64(94)), 
+                     (np.int64(1500), np.int64(1099), np.int64(1400), np.int64(108)), 
+                     (np.int64(0), np.int64(0), np.int64(4000), np.int64(98)), 
+                     (np.int64(0), np.int64(1326), np.int64(4000), np.int64(117)), 
+                     (np.int64(1800), 41, np.int64(2200), 118)], 
+                     TimeWindow(start=0, end=2000000, active_annotations=[0, 1, 2, 3, 4], descriptions=['PSK2', 'AM_SSB', 'OOK', 'FM', 'PSK2']), 4000, 1500), 
+                     ([(np.int64(0), np.int64(0), np.int64(4000), np.int64(157)), (np.int64(0), np.int64(775), np.int64(4000), np.int64(96)), (np.int64(0), np.int64(1326), np.int64(4000), np.int64(117))], TimeWindow(start=47827672, end=49827672, active_annotations=[0, 1, 2, 3, 4], descriptions=['PSK2', 'AM_SSB', 'OOK', 'FM', 'PSK2']), 4000, 1500), ([(np.int64(0), 45, np.int64(2000), np.int64(112)), (np.int64(0), np.int64(0), np.int64(4000), np.int64(98)), (np.int64(0), np.int64(776), np.int64(4000), np.int64(94)), (np.int64(0), np.int64(1326), np.int64(4000), np.int64(117))], TimeWindow(start=54164375, end=56164375, active_annotations=[0, 2, 3, 4], descriptions=['PSK2', 'OOK', 'FM', 'PSK2']), 4000, 1500), ([(np.int64(0), np.int64(0), np.int64(2000), np.int64(98)), (np.int64(0), np.int64(776), np.int64(4000), np.int64(95)), (np.int64(0), np.int64(1326), np.int64(4000), np.int64(117))], TimeWindow(start=62643878, end=64643878, active_annotations=[0, 2, 3], descriptions=['PSK2', 'OOK', 'FM']), 4000, 1500), ([(np.int64(0), np.int64(1327), np.int64(1999), np.int64(115)), (np.int64(0), np.int64(776), np.int64(4000), np.int64(95))], TimeWindow(start=78808910, end=80808910, active_annotations=[0, 2], descriptions=['PSK2', 'OOK']), 4000, 1500), ([(np.int64(0), np.int64(776), np.int64(1998), np.int64(94))], TimeWindow(start=82473102, end=84473102, active_annotations=[0], descriptions=['PSK2']), 4000, 1500)]
 
-    if not tagged_boxes:
-        return []
+    print(merge_boxes(total_boxes))
 
-    # ------------------------------------------------------------------
-    # 2.  Match boxes across windows by frequency band similarity.
-    #     We build groups: each group = one physical signal seen in ≥1
-    #     windows.  Within a group we keep the union frequency band and
-    #     extend the time span from earliest to latest.
-    # ------------------------------------------------------------------
-    groups: List[List[Tuple[float, float, float, float]]] = []
-
-    used = [False] * len(tagged_boxes)
-    for i in range(len(tagged_boxes)):
-        if used[i]:
-            continue
-        box_i, win_i = tagged_boxes[i]
-        group = [box_i]
-        used[i] = True
-
-        for j in range(i + 1, len(tagged_boxes)):
-            if used[j]:
-                continue
-            box_j, win_j = tagged_boxes[j]
-            # Only match boxes from *different* windows
-            if win_j == win_i:
-                continue
-            if _freq_overlap(box_i, box_j, freq_tolerance):
-                group.append(box_j)
-                used[j] = True
-
-        groups.append(group)
-
-    # ------------------------------------------------------------------
-    # 3.  Build the final merged boxes.
-    #     For each group the time span covers from the earliest x to the
-    #     latest x+w.  The frequency band is the union of all members.
-    # ------------------------------------------------------------------
-    merged: List[Tuple[float, float, float, float]] = []
-    for group in groups:
-        x_min = min(b[0] for b in group)
-        x_max = max(b[0] + b[2] for b in group)
-        y_min = min(b[1] for b in group)
-        y_max = max(b[1] + b[3] for b in group)
-        merged.append((x_min, y_min, x_max - x_min, y_max - y_min))
-
-    print(
-        f"[merge_boxes] {len(tagged_boxes)} boxes from "
-        f"{len(window_boxes)} windows → {len(merged)} merged signals"
-    )
-    return merged

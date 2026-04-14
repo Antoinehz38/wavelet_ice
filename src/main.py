@@ -109,9 +109,8 @@ def main()->None:
 
     # Merge all detected boxes into a single global prediction list
     merged = merge_boxes(total_boxes)
-    print(f"\n=== Merged predictions: {len(merged)} boxes ===")
-    for i, box in enumerate(merged):
-        print(f"  [{i}] x={box[0]:.0f}, y={box[1]:.0f}, w={box[2]:.0f}, h={box[3]:.0f}")
+    print(f"\n=== Merged predictions: {len(merged['annotations'])} boxes ===")
+    print(merged['annotations'])
 
 
 if __name__ == "__main__":
