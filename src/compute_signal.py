@@ -129,17 +129,8 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
         else:
             print("No ground truth available for evaluation.")
 
-    # Generate filename for the visualization
-    if params['transform'] == 'cwt_rc':
-        wavelet_name = "Raised_Cosine"
-    elif params['transform'] == 'cwt':
-        wavelet_name = params['wavelet'].replace('/', '_')
-    else:
-        wavelet_name = "Wavelet"
     
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_name = os.path.basename(input_file).replace(".sigmf-data", "")
-
     output_path = build_output_dir_path(output_dir, params, timestamp)
     wavelet_name = resolve_wavelet_name(params)
     filename = f"{wavelet_name}_start_{time_window.start}_length_{time_window.length}.png"

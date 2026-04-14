@@ -162,7 +162,7 @@ def _resolve_example_output_dir(output_dir, params):
         os.makedirs(output_dir, exist_ok=True)
         return output_dir
 
-    example_dir = os.path.join(output_dir, "ex", match.group(1))
+    example_dir = os.path.join(output_dir, match.group(1))
     os.makedirs(example_dir, exist_ok=True)
     return example_dir
 

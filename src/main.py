@@ -102,8 +102,7 @@ def main()->None:
                                                 time_window=w, params=PARAMS)
         total_boxes.append((boxes, w, img_w, img_h))
     
-    print(f'total boxes = {total_boxes}')
-
+    
     # Merge all detected boxes into a single global prediction list
     merged = merge_boxes(total_boxes)
     print(f"\n=== Merged predictions: {len(merged['annotations'])} boxes ===")
