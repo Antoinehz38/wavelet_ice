@@ -80,38 +80,38 @@ def main()->None:
                     input_file = os.path.join(input_folder, file)
                     meta = load_metadata(input_file.replace(".sigmf-data", ".sigmf-meta"))
                     annotations = meta.get("annotations", []) if meta else []
-                windows = build_transition_windows(
+                    windows = build_transition_windows(
                             annotations=annotations,
                             window_size=PARAMS['points_per_window'],
                             global_start=PARAMS['offset'],
                             global_end=PARAMS['offset'] + PARAMS['duration'],
-                        )
+                            )
     
-                print(f"{len(windows)} CWT windows to compute.")
-                total_boxes = []
-                for i, w in enumerate(windows):
-                    print(
-                        f"[{i}] start={w.start}, end={w.end}, len={w.length}, "
-                        f"active={w.descriptions}")
-                    boxes, gt_boxes, img_w, img_h = run_signal_processing_pipeline(input_file, meta, output_dir, 
-                                                            time_window=w, params=PARAMS)
-                    total_boxes.append((boxes, w, img_w, img_h))
-                
-                print(f'total boxes = {total_boxes}')
+                    print(f"{len(windows)} CWT windows to compute.")
+                    total_boxes = []
+                    for i, w in enumerate(windows):
+                        print(
+                            f"[{i}] start={w.start}, end={w.end}, len={w.length}, "
+                            f"active={w.descriptions}")
+                        boxes, gt_boxes, img_w, img_h = run_signal_processing_pipeline(input_file, meta, output_dir, 
+                                                                time_window=w, params=PARAMS)
+                        total_boxes.append((boxes, w, img_w, img_h))
+                    
+                    print(f'total boxes = {total_boxes}')
 
-                # Merge all detected boxes into a single global prediction list
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_path = build_output_dir_path(output_dir, PARAMS, timestamp)
-                wavelet_name = resolve_wavelet_name(PARAMS)
-                merged = merge_boxes(total_boxes)
-                print(f"\n=== Merged predictions: {len(merged['annotations'])} boxes ===")
-                print(merged['annotations'])
+                    # Merge all detected boxes into a single global prediction list
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    output_path = build_output_dir_path(output_dir, PARAMS, timestamp)
+                    wavelet_name = resolve_wavelet_name(PARAMS)
+                    merged = merge_boxes(total_boxes)
+                    print(f"\n=== Merged predictions: {len(merged['annotations'])} boxes ===")
+                    print(merged['annotations'])
 
 
-                os.makedirs(output_path, exist_ok=True)
+                    os.makedirs(output_path, exist_ok=True)
 
-                with open(os.path.join(output_path, f"{wavelet_name}_{timestamp}.json"), "w") as f:
-                    json.dump(merged, f, indent=4)
+                    with open(os.path.join(output_path, f"{wavelet_name}_{timestamp}.json"), "w") as f:
+                        json.dump(merged, f, indent=4)
 
                 
                     
