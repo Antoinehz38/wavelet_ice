@@ -15,6 +15,12 @@ from src.processing.transformations.wavelet.dsp_rc import compute_dual_linear_cw
 from src.processing.transformations.wavelet.dsp_dtcwt import compute_dual_dtcwt_scalogram_dyadic
 from src.processing.transformations.wavelet.dsp import compute_dual_linear_cwt, freq_to_pixel_linear
 
+from src.processing.transformations.wavelet.bump import BumpWavelet
+from src.processing.transformations.wavelet.dsp_bump import compute_dual_linear_cwt_bump
+
+from src.processing.transformations.wavelet.morse import MorseWavelet
+from src.processing.transformations.wavelet.dsp_morse import compute_dual_linear_cwt_morse
+
 from src.processing.tools.viz import build_output_dir_path, resolve_wavelet_name
 
 
@@ -68,6 +74,34 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             qshift=params['dtcwt_qshift'],
             top_db_per_band=40.0,
             resize_to_signal_len=params['dtcwt_resize_to_signal_len'],
+        )
+    
+    elif params['transform'] == 'cwt_bump':
+        bump = BumpWavelet(
+            fc=params['bump_fc'],
+            B=params['bump_B']
+        )
+        spec = compute_dual_linear_cwt_bump(
+            sig,
+            bump,
+            params['img_height'],
+            params['f_min'],
+            params['f_max'],
+            params['fs']
+        )
+
+    elif params['transform'] == 'cwt_morse':
+        morse = MorseWavelet(
+            beta=params['morse_beta'],
+            gamma=params['morse_gamma']
+        )
+        spec = compute_dual_linear_cwt_morse(
+            sig,
+            morse,
+            params['img_height'],
+            params['f_min'],
+            params['f_max'],
+            params['fs']
         )
     else:
         raise ValueError("params['transform'] must be 'cwt' or 'cwt_rc'")

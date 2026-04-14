@@ -1,6 +1,7 @@
-import os, datetime
+import os, datetime, json
 from pathlib import Path
-import numpy as np 
+import numpy as np
+from src.processing.tools.viz import build_output_dir_path, resolve_wavelet_name 
 
 
 from src.compute_signal import run_signal_processing_pipeline
@@ -33,6 +34,10 @@ PARAMS = {
     'dtcwt_biort': 'near_sym_a',
     'dtcwt_qshift': 'qshift_a',
     'dtcwt_resize_to_signal_len': False,
+    'bump_fc': 0.15,       
+    'bump_B': 0.01,         
+    'morse_beta': 450.0,
+    'morse_gamma': 3.0, 
 }
 
 def main()->None:
@@ -61,11 +66,20 @@ def main()->None:
         input_folder = str(args.runPipelineOnFolder)
         output_dir = str(args.output)
         ensure_dir(output_dir)
-        for file in os.listdir(input_folder):
-            if file.endswith(".sigmf-data"):
-                input_file = os.path.join(input_folder, file)
-                meta = load_metadata(input_file.replace(".sigmf-data", ".sigmf-meta"))
-                annotations = meta.get("annotations", []) if meta else []
+        for transfo, wavelet in [['cwt',"cmor100.0-1.0"], 
+                                 ['cwt',"fbsp10-0.01-2"]]:
+                                #  ['cwt_rc', ''], 
+                                #  ['stft', ''], 
+                                #  ['cwt_bump', ''], 
+                                #  ['cwt_morse', '']]:
+            PARAMS['transform'] = transfo
+            if transfo == 'cwt':
+                PARAMS['wavelet'] = wavelet
+            for file in os.listdir(input_folder):
+                if file.endswith(".sigmf-data"):
+                    input_file = os.path.join(input_folder, file)
+                    meta = load_metadata(input_file.replace(".sigmf-data", ".sigmf-meta"))
+                    annotations = meta.get("annotations", []) if meta else []
                 windows = build_transition_windows(
                             annotations=annotations,
                             window_size=PARAMS['points_per_window'],
@@ -73,9 +87,33 @@ def main()->None:
                             global_end=PARAMS['offset'] + PARAMS['duration'],
                         )
     
-                for w in windows:
+                print(f"{len(windows)} CWT windows to compute.")
+                total_boxes = []
+                for i, w in enumerate(windows):
+                    print(
+                        f"[{i}] start={w.start}, end={w.end}, len={w.length}, "
+                        f"active={w.descriptions}")
                     boxes, gt_boxes, img_w, img_h = run_signal_processing_pipeline(input_file, meta, output_dir, 
-                                                time_window=w, params=PARAMS)
+                                                            time_window=w, params=PARAMS)
+                    total_boxes.append((boxes, w, img_w, img_h))
+                
+                print(f'total boxes = {total_boxes}')
+
+                # Merge all detected boxes into a single global prediction list
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = build_output_dir_path(output_dir, PARAMS, timestamp)
+                wavelet_name = resolve_wavelet_name(PARAMS)
+                merged = merge_boxes(total_boxes)
+                print(f"\n=== Merged predictions: {len(merged['annotations'])} boxes ===")
+                print(merged['annotations'])
+
+
+                os.makedirs(output_path, exist_ok=True)
+
+                with open(os.path.join(output_path, f"{wavelet_name}_{timestamp}.json"), "w") as f:
+                    json.dump(merged, f, indent=4)
+
+                
                     
 
         return None 

@@ -30,7 +30,7 @@ def parse_args():
     parser.add_argument(
         "--duration",
         type=int,
-        default=20_000,
+        default=100_000_000,
         help="Number of samples to load",
     )
 
@@ -72,14 +72,14 @@ def parse_args():
     parser.add_argument(
         "--downSizeFactor",
         type=int,
-        default=500,
+        default=250,
         help="Downsample factor for the output image",
     )
 
     parser.add_argument(
         "--pointsPerWindow",
         type=int,
-        default=100_000,
+        default=1_000_000,
         help="Number of points per window for CWT calculation",
     )
 
