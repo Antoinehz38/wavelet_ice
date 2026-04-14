@@ -4,14 +4,16 @@ import datetime
 import cv2
 
 from src.cwt_scheduler import TimeWindow
-from src.processing.tools.dsp import compute_dual_linear_cwt, freq_to_pixel_linear
 from src.processing.tools.evaluations import evaluate_coco_style
 from src.processing.tools.loaders import load_iq_data
-from src.processing.tools.raised_cosine import RaisedCosineWavelet
-from src.processing.transformations.wavelet.dsp_rc import compute_dual_linear_cwt_rc
-from src.processing.transformations.baseline.dsp_stft import compute_stft_scalogram
 from src.processing.tools.vision import detect_box
 from src.processing.tools.viz import save_viz_comparison, compress_spectrogram
+
+from src.processing.transformations.baseline.dsp_stft import compute_stft_scalogram
+from src.processing.tools.raised_cosine import RaisedCosineWavelet
+from src.processing.transformations.wavelet.dsp_rc import compute_dual_linear_cwt_rc
+from src.processing.transformations.wavelet.dsp_dtcwt import compute_dual_dtcwt_scalogram_dyadic
+from src.processing.transformations.wavelet.dsp import compute_dual_linear_cwt, freq_to_pixel_linear
 
 
 def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str, time_window: TimeWindow, params: dict) -> tuple[list, list, int, int]:
@@ -54,6 +56,16 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             noverlap=params['stft_noverlap'],
             nfft=params['stft_nfft'],
             window=params['stft_window'],
+        )
+    elif params['transform'] == 'dtcwt':
+        spec = compute_dual_dtcwt_scalogram_dyadic(
+            iq_data=sig,
+            total_height=params['img_height'],
+            nlevels=params['dtcwt_levels'],
+            biort=params['dtcwt_biort'],
+            qshift=params['dtcwt_qshift'],
+            top_db_per_band=40.0,
+            resize_to_signal_len=params['dtcwt_resize_to_signal_len'],
         )
     else:
         raise ValueError("params['transform'] must be 'cwt' or 'cwt_rc'")

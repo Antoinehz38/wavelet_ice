@@ -15,7 +15,8 @@ dependencies = [
     "torch",
     "matplotlib",
     "opencv-python",
-    "PyWavelets"
+    "PyWavelets",
+    "dtcwt",
 ]
 
 [tool.pytest.ini_options]

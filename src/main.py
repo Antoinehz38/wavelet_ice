@@ -25,10 +25,14 @@ PARAMS = {
     'downsample_factor': 500,
     'saveRaw': False,
     'addPrediction': False,
-    'stft_nperseg': 256, #taille fenetre, si grand : meilleure resolution temporelle, moins frequentielle et inversement
-    'stft_noverlap': 192, #recouvrement, souvent 75% de nperseg
-    'stft_nfft': 512,          # mettre None pour prendre nperseg, si nfft > nperseg → zero-padding
-    'stft_window': 'hann',     # fenetre de hann ou de hamming ou autre, il faudrait en tester plusieurs
+    'stft_nperseg': 256,
+    'stft_noverlap': 192,
+    'stft_nfft': 512,          
+    'stft_window': 'hann',    
+    'dtcwt_levels': 8,
+    'dtcwt_biort': 'near_sym_a',
+    'dtcwt_qshift': 'qshift_a',
+    'dtcwt_resize_to_signal_len': False,
 }
 
 def main()->None:
