@@ -164,6 +164,15 @@ def box_to_physical_params(box, params):
         'f1': f1,
     }
 
+def enrich_physical_params(params_dict):
+    """Ajoute tc, fc, B et D à partir de t0/t1/f0/f1."""
+    enriched = dict(params_dict)
+    enriched['tc'] = float((enriched['t0'] + enriched['t1']) / 2.0)
+    enriched['fc'] = float((enriched['f0'] + enriched['f1']) / 2.0)
+    enriched['B'] = float(enriched['f1'] - enriched['f0'])
+    enriched['D'] = float(enriched['t1'] - enriched['t0'])
+    return enriched
+
 
 def match_boxes_detailed(pred_boxes, gt_boxes, iou_threshold):
     """
@@ -251,18 +260,26 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
 
     if params is not None and gt_boxes and isinstance(gt_boxes[0], dict):
         tp, fp, fn, matches = match_boxes_detailed(pred_boxes, gt_boxes, 0.5)
+        print("-----------------------")
+        print("Rapport métriques :")
+        print("-----------------------")
+        print()
         print(f"Nb pred - Nb metadata = {len(pred_boxes)} - {len(gt_boxes)} = {len(pred_boxes) - len(gt_boxes)}")
         print(f"BBox valides (IoU >= 0.50) : {tp} | FP : {fp} | FN : {fn}")
 
         detailed_matches = []
         for match in matches:
-            pred_params = box_to_physical_params(match['pred_box'], params)
-            gt_params = match['gt_params']
+            pred_params = enrich_physical_params(box_to_physical_params(match['pred_box'], params))
+            gt_params = enrich_physical_params(match['gt_params'])
             deltas = {
                 't0': float(gt_params['t0'] - pred_params['t0']),
                 't1': float(gt_params['t1'] - pred_params['t1']),
                 'f0': float(gt_params['f0'] - pred_params['f0']),
                 'f1': float(gt_params['f1'] - pred_params['f1']),
+                'tc': float(gt_params['tc'] - pred_params['tc']),
+                'fc': float(gt_params['fc'] - pred_params['fc']),
+                'B': float(gt_params['B'] - pred_params['B']),
+                'D': float(gt_params['D'] - pred_params['D']),
             }
 
             detailed_match = {
@@ -279,17 +296,23 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
             print(
                 "Prediction : "
                 f"t0={pred_params['t0']:.2f}, t1={pred_params['t1']:.2f}, "
-                f"f0={pred_params['f0']:.6f}, f1={pred_params['f1']:.6f}"
+                f"f0={pred_params['f0']:.6f}, f1={pred_params['f1']:.6f}, "
+                f"tc={pred_params['tc']:.2f}, fc={pred_params['fc']:.6f}, "
+                f"B={pred_params['B']:.6f}, D={pred_params['D']:.2f}"
             )
             print(
                 "Metadata   : "
                 f"t0={gt_params['t0']:.2f}, t1={gt_params['t1']:.2f}, "
-                f"f0={gt_params['f0']:.6f}, f1={gt_params['f1']:.6f}"
+                f"f0={gt_params['f0']:.6f}, f1={gt_params['f1']:.6f}, "
+                f"tc={gt_params['tc']:.2f}, fc={gt_params['fc']:.6f}, "
+                f"B={gt_params['B']:.6f}, D={gt_params['D']:.2f}"
             )
             print(
                 "Delta meta - pred : "
                 f"t0={deltas['t0']:.2f}, t1={deltas['t1']:.2f}, "
-                f"f0={deltas['f0']:.6f}, f1={deltas['f1']:.6f}"
+                f"f0={deltas['f0']:.6f}, f1={deltas['f1']:.6f}, "
+                f"tc={deltas['tc']:.2f}, fc={deltas['fc']:.6f}, "
+                f"B={deltas['B']:.6f}, D={deltas['D']:.2f}"
             )
 
         report['valid_matches_iou_0_50'] = detailed_matches

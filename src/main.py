@@ -28,7 +28,7 @@ def main() -> None:
 
     if meta_file == 'None':
         meta_file = input_file.replace(".sigmf-data", ".sigmf-meta")
-        print(f"meta_file = {meta_file}")
+        # print(f"meta_file = {meta_file}")
 
     PARAMS['duration'] = args.duration
     PARAMS['offset'] = args.offset
