@@ -31,7 +31,7 @@ def detect_box(image, delta_t=100,
 
     refined = refine_temporal_borders(image, detections_list, delta_t, time_threshold=refinement_threshold, time_smoothing=refinement_smoothing)
 
-    boxes = merge_precise_detections(refined, tolerance=15)
+    boxes = merge_precise_detections(refined, smoothed_spectrogram=smoothed_spec, tolerance=15)
 
     return boxes
 
