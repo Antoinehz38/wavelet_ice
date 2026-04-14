@@ -1,5 +1,5 @@
 import numpy as np
-from src.data_processing.tools.bump import BumpWavelet
+from src.processing.transformations.wavelet.bump import BumpWavelet
 
 
 def generate_linear_scales_bump(f_min, f_max, num_pixels, wavelet: BumpWavelet, fs=1.0):

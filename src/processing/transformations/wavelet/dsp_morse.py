@@ -1,5 +1,5 @@
 import numpy as np
-from src.data_processing.tools.morse import MorseWavelet
+from src.processing.transformations.wavelet.morse import MorseWavelet
 
 
 def generate_linear_scales_morse(f_min, f_max, num_pixels, wavelet: MorseWavelet, fs=1.0):
