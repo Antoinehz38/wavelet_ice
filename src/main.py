@@ -1,22 +1,22 @@
-import os
+import os, datetime
+from pathlib import Path
+import numpy as np 
+
 
 from src.compute_signal import run_signal_processing_pipeline
 from src.cwt_scheduler import build_transition_windows
 from src.helpers.parser import parse_args
 from src.processing.tools.loaders import ensure_dir, load_metadata
 from src.processing.tools.evaluations import merge_boxes
+from src.helpers.display import print_transformation_params
 
 
 PARAMS = {
-    'offset': 0,
-    'duration': 20_000,
     'fs': 1.0,
     'img_height': 512,
     'points_per_window': 1_000_000,
     'f_min': 0.005,
     'f_max': 0.5,
-    'wavelet': "cmor100.0-1.0",
-    'transform': 'cwt',
     'rc_fc': 1.0,
     'rc_B': 0.12,
     'rc_beta': 0.25,
@@ -44,29 +44,18 @@ def main()->None:
         meta_file = input_file.replace(".sigmf-data", ".sigmf-meta")
         print(f'meta_file = {meta_file}')
 
-    if args.duration:
-        PARAMS['duration'] = args.duration
 
-    if args.offset:
-        PARAMS['offset'] = args.offset
+    PARAMS['duration'] = args.duration
+    PARAMS['offset'] = args.offset
+    PARAMS['transform'] = args.transfoType
+    PARAMS['wavelet'] = args.waveletType
+    PARAMS['downsample_factor'] = args.downSizeFactor
+    PARAMS['saveRaw'] = args.saveRaw
+    PARAMS['addPrediction'] = args.addPrediction
+    PARAMS['points_per_window'] = args.pointsPerWindow
+    PARAMS['input_file'] = input_file
 
-    if args.transfoType:
-        PARAMS['transform'] = args.transfoType
-
-    if args.waveletType:
-        PARAMS['wavelet'] = args.waveletType
-    
-    if args.downSizeFactor:
-        PARAMS['downsample_factor'] = args.downSizeFactor
-    
-    if args.saveRaw:
-        PARAMS['saveRaw'] = True
-
-    if args.addPrediction:
-        PARAMS['addPrediction'] = True
-    
-    if args.pointsPerWindow:
-        PARAMS['points_per_window'] = args.pointsPerWindow
+    print_transformation_params(PARAMS)
     
     if args.runPipelineOnFolder:
         input_folder = str(args.runPipelineOnFolder)
@@ -113,8 +102,7 @@ def main()->None:
                                                 time_window=w, params=PARAMS)
         total_boxes.append((boxes, w, img_w, img_h))
     
-    print(f'total boxes = {total_boxes}')
-
+    
     # Merge all detected boxes into a single global prediction list
     merged = merge_boxes(total_boxes)
     print(f"\n=== Merged predictions: {len(merged['annotations'])} boxes ===")

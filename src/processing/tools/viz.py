@@ -1,4 +1,4 @@
-import os
+import os, re
 import datetime
 
 import numpy as np
@@ -143,3 +143,30 @@ def save_spectrogram_image(spectrogram, output_dir, params):
     plt.close(fig)
 
     print(f"Spectrogram saved: {save_path} ({out_w_px}x{out_h_px}px)")
+
+
+def resolve_wavelet_name(params):
+    if params['transform'] == 'cwt_rc':
+        return "Raised_Cosine"
+    if params['transform'] == 'cwt':
+        return params['wavelet']
+    return "Wavelet"
+
+
+def _resolve_example_output_dir(output_dir, params):
+    input_file = params.get('input_file', '')
+    input_name = os.path.basename(input_file)
+    match = re.search(r"(ex\d+)", input_name)
+
+    if not match:
+        os.makedirs(output_dir, exist_ok=True)
+        return output_dir
+
+    example_dir = os.path.join(output_dir, match.group(1))
+    os.makedirs(example_dir, exist_ok=True)
+    return example_dir
+
+
+def build_output_dir_path(output_dir, params, timestamp, extension=".png"):
+    target_output_dir = _resolve_example_output_dir(output_dir, params)
+    return target_output_dir

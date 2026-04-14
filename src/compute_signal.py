@@ -15,6 +15,8 @@ from src.processing.transformations.wavelet.dsp_rc import compute_dual_linear_cw
 from src.processing.transformations.wavelet.dsp_dtcwt import compute_dual_dtcwt_scalogram_dyadic
 from src.processing.transformations.wavelet.dsp import compute_dual_linear_cwt, freq_to_pixel_linear
 
+from src.processing.tools.viz import build_output_dir_path, resolve_wavelet_name
+
 
 def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str, time_window: TimeWindow, params: dict) -> tuple[list, list, int, int]:
     # Absolute bounds of the current time window
@@ -127,18 +129,12 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
         else:
             print("No ground truth available for evaluation.")
 
-    # Generate filename for the visualization
-    if params['transform'] == 'cwt_rc':
-        wavelet_name = "Raised_Cosine"
-    elif params['transform'] == 'cwt':
-        wavelet_name = params['wavelet'].replace('/', '_')
-    else:
-        wavelet_name = "Wavelet"
     
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    input_name = os.path.basename(input_file).replace(".sigmf-data", "")
-    filename = f"{input_name}_{wavelet_name}_start_{time_window.start}_length_{time_window.length}.png"
-    filepath = os.path.join(output_dir, filename)
+    output_path = build_output_dir_path(output_dir, params, timestamp)
+    wavelet_name = resolve_wavelet_name(params)
+    filename = f"{wavelet_name}_start_{time_window.start}_length_{time_window.length}.png"
+    filepath = os.path.join(output_path, filename)
 
     save_viz_comparison(compressed_spec, gt_boxes_pixels, boxes, filepath, params)
 
