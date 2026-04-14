@@ -167,8 +167,6 @@ def _resolve_example_output_dir(output_dir, params):
     return example_dir
 
 
-def build_output_path(output_dir, params, timestamp, extension=".png"):
-    wavelet_name = resolve_wavelet_name(params)
-    filename = f"{wavelet_name}_{timestamp}{extension}"
+def build_output_dir_path(output_dir, params, timestamp, extension=".png"):
     target_output_dir = _resolve_example_output_dir(output_dir, params)
-    return os.path.join(target_output_dir, filename)
+    return target_output_dir
