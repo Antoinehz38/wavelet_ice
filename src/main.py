@@ -9,7 +9,7 @@ from src.data_processing.tools.raised_cosine import RaisedCosineWavelet
 
 
 PARAMS = {
-    'offset': 606028,
+    'offset': 606028 - 20_000,
     'duration': 2_000_000,
     'fs': 1.0,
     'img_height': 512,
