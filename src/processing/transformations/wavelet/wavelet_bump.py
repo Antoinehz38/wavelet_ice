@@ -12,11 +12,11 @@ DURATION_TO_READ = 200000
 BOUNDING_BOX = True
 BOUNDING_BOX_COLOR = "black"
 
-# --- PARAMETRES WAVELET BUMP ---
-# omega0: frequence centrale (rad/sample), sigma: largeur de bande (rad/sample)
+# --- BUMP WAVELET PARAMETERS ---
+# omega0: center frequency (rad/sample), sigma: bandwidth (rad/sample)
 OMEGA0 = 5.0
 SIGMA = 2.0
-# Si False, on garde les frequences negatives (utile pour signaux IQ)
+# If False, keep negative frequencies (useful for IQ signals)
 ANALYTIC = False
 
 
@@ -28,10 +28,10 @@ def ensure_dir(directory):
 def load_sigmf_chunk(filepath, num_samples, offset=0):
     try:
         data = np.fromfile(filepath, dtype=np.complex64, count=num_samples, offset=offset)
-        print(f"✅ Chargé {len(data)} échantillons.")
+        print(f"Loaded {len(data)} samples.")
         return data
     except FileNotFoundError:
-        print(f"❌ Erreur : Fichier introuvable : {filepath}")
+        print(f"Error: File not found: {filepath}")
         return None
 
 
@@ -46,7 +46,7 @@ def load_sigmf_metadata(meta_path):
         with open(meta_path, "r") as f:
             return json.load(f)
     except FileNotFoundError:
-        print(f"⚠️  Metadonnees introuvables : {meta_path}")
+        print(f"Metadata not found: {meta_path}")
         return None
 
 
@@ -96,7 +96,7 @@ def draw_bounding_boxes(ax, boxes, color="pink", linewidth=2):
 
 
 def bump_hat(omega, omega0=OMEGA0, sigma=SIGMA, analytic=ANALYTIC):
-    """Bump wavelet en domaine frequentiel (support compact)."""
+    """Bump wavelet in frequency domain (compact support)."""
     x = (omega - omega0) / sigma
     inside = np.abs(x) < 1.0
     bump = np.zeros_like(omega, dtype=np.float64)
@@ -113,7 +113,7 @@ def get_frequency_range(analytic, fs):
 
 
 def compute_bump_scalogram(iq_data):
-    print("⏳ Calcul CWT avec wavelet Bump...")
+    print("Computing CWT with Bump wavelet...")
     n = iq_data.size
     scales = np.arange(2, 128)
     omega = 2.0 * np.pi * np.fft.fftfreq(n, d=1.0 / SAMPLE_RATE)
@@ -170,10 +170,10 @@ def save_results(spectrogram, output_dir, source_file, wavelet_params, bounding_
         vmax=vm,
     )
 
-    plt.colorbar(im, label="Puissance (dB)")
-    plt.title(f"Scalogramme Bump - {timestamp}")
-    plt.ylabel("Frequence Normalisee")
-    plt.xlabel("Temps (Echantillons)")
+    plt.colorbar(im, label="Power (dB)")
+    plt.title(f"Bump Scalogram - {timestamp}")
+    plt.ylabel("Normalized Frequency")
+    plt.xlabel("Time (Samples)")
 
     if not wavelet_params["analytic"]:
         ax.axhline(0, color="white", linestyle="--", alpha=0.5, linewidth=0.8)
@@ -185,7 +185,7 @@ def save_results(spectrogram, output_dir, source_file, wavelet_params, bounding_
 
     plt.savefig(img_path, dpi=150)
     plt.close()
-    print(f"💾 Image sauvegardee : {img_path}")
+    print(f"Image saved: {img_path}")
 
     metadata = {
         "timestamp": timestamp,

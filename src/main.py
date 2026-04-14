@@ -1,10 +1,10 @@
 import os
 
-from src.cwt_scheduler import build_cwt_windows_from_annotations, TimeWindow
-from src.helpers.parser import parse_args
-from src.data_processing.tools import evaluations, dsp, loaders, viz, vision, dsp_rc
-from src.data_processing.tools.raised_cosine import RaisedCosineWavelet
 from src.compute_signal import run_signal_processing_pipeline
+from src.cwt_scheduler import build_transition_windows
+from src.helpers.parser import parse_args
+from src.processing.tools.loaders import ensure_dir, load_metadata
+from src.processing.tools.evaluations import merge_boxes
 
 
 PARAMS = {
@@ -15,23 +15,20 @@ PARAMS = {
     'points_per_window': 1_000_000,
     'f_min': 0.005,
     'f_max': 0.5,
-    'wavelet': "cmor100.0-1.0" , #"cmor100.0-1.0"  'fbsp10-0.01-2'
-
-    'transform': 'cwt',      # cwt_rc ou cwt
-
-    'rc_fc': 1.0,            # exemple (dans [0, 0.5] si fs=1)
-    'rc_B': 0.12,            # bande utile
-    'rc_beta': 0.25,         # roll-off
-    
-
-    'detect_db_range': 28, # réglage détection
-
-    'detect_kernel': (200, 2), 
+    'wavelet': "cmor100.0-1.0",
+    'transform': 'cwt',
+    'rc_fc': 1.0,
+    'rc_B': 0.12,
+    'rc_beta': 0.25,
+    'detect_db_range': 28,
+    'detect_kernel': (200, 2),
     'downsample_factor': 500,
-
     'saveRaw': False,
-
     'addPrediction': False,
+    'stft_nperseg': 256, #taille fenetre, si grand : meilleure resolution temporelle, moins frequentielle et inversement
+    'stft_noverlap': 192, #recouvrement, souvent 75% de nperseg
+    'stft_nfft': 512,          # mettre None pour prendre nperseg, si nfft > nperseg → zero-padding
+    'stft_window': 'hann',     # fenetre de hann ou de hamming ou autre, il faudrait en tester plusieurs
 }
 
 def main()->None:
@@ -70,58 +67,56 @@ def main()->None:
     if args.runPipelineOnFolder:
         input_folder = str(args.runPipelineOnFolder)
         output_dir = str(args.output)
-        loaders.ensure_dir(output_dir)
+        ensure_dir(output_dir)
         for file in os.listdir(input_folder):
             if file.endswith(".sigmf-data"):
                 input_file = os.path.join(input_folder, file)
-                meta= loaders.load_metadata(input_file.replace(".sigmf-data", ".sigmf-meta"))
+                meta = load_metadata(input_file.replace(".sigmf-data", ".sigmf-meta"))
                 annotations = meta.get("annotations", []) if meta else []
-                windows = build_cwt_windows_from_annotations(
+                windows = build_transition_windows(
                             annotations=annotations,
-                            points_per_window=PARAMS['points_per_window'],
+                            window_size=PARAMS['points_per_window'],
                             global_start=PARAMS['offset'],
                             global_end=PARAMS['offset'] + PARAMS['duration'],
                         )
     
                 for w in windows:
-                    run_signal_processing_pipeline(input_file, meta, output_dir, 
+                    boxes, gt_boxes, img_w, img_h = run_signal_processing_pipeline(input_file, meta, output_dir, 
                                                 time_window=w, params=PARAMS)
+                    
 
         return None 
 
     output_dir = str(args.output)
-    loaders.ensure_dir(output_dir)
+    ensure_dir(output_dir)
 
-    meta = loaders.load_metadata(meta_file)
+    meta = load_metadata(meta_file)
 
     annotations = meta.get("annotations", []) if meta else []
-    windows = build_cwt_windows_from_annotations(
+    windows = build_transition_windows(
         annotations=annotations,
-        points_per_window=PARAMS['points_per_window'],
+        window_size=PARAMS['points_per_window'],
         global_start=PARAMS['offset'],
         global_end=PARAMS['offset'] + PARAMS['duration'],
     )
-    print(f"{len(windows)} fenêtres CWT à calculer.")
+    print(f"{len(windows)} CWT windows to compute.")
+    total_boxes = []
     for i, w in enumerate(windows):
         print(
             f"[{i}] start={w.start}, end={w.end}, len={w.length}, "
             f"active={w.descriptions}")
-    for i,w in enumerate(windows):
-        print(
-            f"[{i}] start={w.start}, end={w.end}, len={w.length}, "
-            f"active={w.descriptions}")
-        run_signal_processing_pipeline(input_file, meta, output_dir, 
-                                       time_window=w, params=PARAMS)
+        boxes, gt_boxes, img_w, img_h = run_signal_processing_pipeline(input_file, meta, output_dir, 
+                                                time_window=w, params=PARAMS)
+        total_boxes.append((boxes, w, img_w, img_h))
+    
+    print(f'total boxes = {total_boxes}')
 
-    # time_window = TimeWindow(
-    #     start=PARAMS['offset'],
-    #     end=PARAMS['offset'] + PARAMS['duration'],
-    #     length=PARAMS['duration'],
-    #     active_annotations=[],
-    #     descriptions=[],
-    # )
-    # run_signal_processing_pipeline(input_file, meta, output_dir, 
-    #                                 time_window=time_window, params=PARAMS)
+    # Merge all detected boxes into a single global prediction list
+    merged = merge_boxes(total_boxes)
+    print(f"\n=== Merged predictions: {len(merged['annotations'])} boxes ===")
+    print(merged['annotations'])
+
+
 if __name__ == "__main__":
     main()
 
