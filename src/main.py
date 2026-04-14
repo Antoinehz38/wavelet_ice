@@ -76,8 +76,9 @@ def main()->None:
                         )
     
                 for w in windows:
-                    run_signal_processing_pipeline(input_file, meta, output_dir, 
+                    boxes, gt_boxes = run_signal_processing_pipeline(input_file, meta, output_dir, 
                                                 time_window=w, params=PARAMS)
+                    
 
         return None 
 
@@ -98,8 +99,9 @@ def main()->None:
         print(
             f"[{i}] start={w.start}, end={w.end}, len={w.length}, "
             f"active={w.descriptions}")
-        run_signal_processing_pipeline(input_file, meta, output_dir,
-                                       time_window=w, params=PARAMS)
+        boxes, gt_boxes = run_signal_processing_pipeline(input_file, meta, output_dir, 
+                                                time_window=w, params=PARAMS)
+                    
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,4 @@
-import os
+import os, time
 import datetime
 
 import cv2
@@ -13,7 +13,7 @@ from src.processing.tools.vision import detect_box
 from src.processing.tools.viz import save_viz_comparison, compress_spectrogram
 
 
-def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str, time_window: TimeWindow, params: dict) -> None:
+def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str, time_window: TimeWindow, params: dict) -> tuple[list, list]:
     # Absolute bounds of the current time window
     win_start = time_window.start
     win_end   = time_window.start + time_window.length
@@ -23,11 +23,14 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
         return None
 
     if params.get('transform', 'cwt') == 'cwt':
+        t = time.time()
         spec = compute_dual_linear_cwt(
             sig, params['wavelet'], params['img_height'],
             params['f_min'], params['f_max'], params['fs'],
         )
+        print(f"CWT computation time: {time.time() - t:.2f} seconds")
     elif params['transform'] == 'cwt_rc':
+        t = time.time()
         rc = RaisedCosineWavelet(
             fc=params['rc_fc'],
             B=params['rc_B'],
@@ -37,6 +40,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
             sig, rc, params['img_height'],
             params['f_min'], params['f_max'], params['fs'],
         )
+        print(f"Raised-cosine CWT computation time: {time.time() - t:.2f} seconds")
     else:
         raise ValueError("params['transform'] must be 'cwt' or 'cwt_rc'")
 
@@ -112,4 +116,4 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
 
     save_viz_comparison(compressed_spec, gt_boxes_pixels, boxes, filepath, params)
 
-    return None
+    return boxes, gt_boxes_pixels

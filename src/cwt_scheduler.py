@@ -70,14 +70,31 @@ def build_transition_windows(
         end = start + int(ann["core:sample_count"])
         transition_points.update([start, end])
 
-    valid_points = [
+    valid_points = sorted([
         p for p in transition_points
         if p >= global_start and (global_end is None or p <= global_end)
-    ]
+    ])
+
+    if not valid_points:
+        return []
+
+    clusters: List[List[int]] = []
+    current_cluster = [valid_points[0]]
+    merge_threshold = window_size // 3
+
+    for p in valid_points[1:]:
+        if p - current_cluster[0] <= merge_threshold:
+            current_cluster.append(p)
+        else:
+            clusters.append(current_cluster)
+            current_cluster = [p]
+    if current_cluster:
+        clusters.append(current_cluster)
 
     unique_bounds: Set[Tuple[int, int]] = set()
-    for pos in sorted(valid_points):
-        bounds = _get_centered_bounds(pos, window_size, global_start, global_end)
+    for cluster in clusters:
+        cluster_center = (cluster[0] + cluster[-1]) // 2
+        bounds = _get_centered_bounds(cluster_center, window_size, global_start, global_end)
         unique_bounds.add(bounds)
 
     windows: List[TimeWindow] = []

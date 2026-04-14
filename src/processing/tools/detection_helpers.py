@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from scipy.ndimage import label, find_objects
 from scipy.signal import butter, filtfilt, find_peaks
+from scipy.optimize import curve_fit
 
 from src.processing.tools.dsp import freq_to_pixel_linear
 from src.processing.tools.loaders import load_metadata
@@ -161,22 +162,26 @@ def detect_signals_all_windows(smoothed_spectrogram, threshold=25):
 
     return detections_list
 
-
 def detect_robust_signals(smoothed_spectrogram,
                           min_prominence=5,
                           min_width=5,
                           min_distance=10,
                           max_intensity_ratio=1.5,
                           rolloff_threshold=0.90):
-    """Detect signals with intelligent merging/splitting and roll-off trimming."""
+    """Detect signals with intelligent merging/splitting and roll-off trimming.
+    Includes padding to accurately detect signals on the frequency boundaries."""
     _, T_reduced = smoothed_spectrogram.shape
     detections_list = []
+
+    pad_width = 50 
 
     for i in range(T_reduced):
         freq_profile = smoothed_spectrogram[:, i]
 
-        peaks, properties = find_peaks(
-            freq_profile,
+        padded_profile = np.pad(freq_profile, (pad_width, pad_width), mode='constant', constant_values=0)
+
+        peaks_padded, properties_padded = find_peaks(
+            padded_profile,
             prominence=min_prominence,
             width=min_width,
             rel_height=0.85,
@@ -184,17 +189,22 @@ def detect_robust_signals(smoothed_spectrogram,
         )
 
         raw_bands = []
-        if len(peaks) > 0:
-            left_edges = properties["left_ips"]
-            right_edges = properties["right_ips"]
+        if len(peaks_padded) > 0:
+            peaks = peaks_padded - pad_width
+            left_edges = properties_padded["left_ips"] - pad_width
+            right_edges = properties_padded["right_ips"] - pad_width
 
             for peak_idx, f_min, f_max in zip(peaks, left_edges, right_edges):
-                raw_bands.append({
-                    'f_min': int(f_min),
-                    'f_max': int(f_max),
-                    'peak_idx': peak_idx,
-                    'intensity': freq_profile[peak_idx],
-                })
+                if 0 <= peak_idx < len(freq_profile):
+                    f_min_clipped = max(0, int(f_min))
+                    f_max_clipped = min(len(freq_profile) - 1, int(f_max))
+                    
+                    raw_bands.append({
+                        'f_min': f_min_clipped,
+                        'f_max': f_max_clipped,
+                        'peak_idx': int(peak_idx),
+                        'intensity': freq_profile[int(peak_idx)],
+                    })
 
         if len(raw_bands) > 0:
             raw_bands.sort(key=lambda x: x['f_min'])
@@ -255,28 +265,114 @@ def detect_robust_signals(smoothed_spectrogram,
 
     return detections_list
 
-def merge_precise_detections(refined_detections, tolerance=3):
-    """Merge detections using precise computed timestamps."""
+def gaussian(x, amplitude, mean, stddev):
+    """Équation d'une seule courbe en cloche."""
+    return amplitude * np.exp(-((x - mean) / stddev)**2 / 2)
+
+def double_gaussian(x, a1, m1, s1, a2, m2, s2):
+    """Somme de deux courbes en cloche qui se chevauchent."""
+    return gaussian(x, a1, m1, s1) + gaussian(x, a2, m2, s2)
+
+def extract_signals_curvefit(freq_profile, base_f_min, base_f_max, current_f_min, current_f_max, rolloff_threshold=0.3):
+    """
+    Méthode 2: Ajustement mathématique (Curve Fitting).
+    Force la reconnaissance de 2 cloches distinctes dans le profil fusionné.
+    """
+    # On isole la zone large contenant les deux signaux
+    pad = 20
+    c_min = max(0, current_f_min - pad)
+    c_max = min(len(freq_profile), current_f_max + pad)
+    
+    x_data = np.arange(c_min, c_max)
+    y_data = freq_profile[c_min:c_max]
+    
+    if len(y_data) < 10:
+        return current_f_max - (current_f_max - base_f_max), current_f_max
+
+    # --- Hypothèses initiales pour aider l'algorithme ---
+    # Cloche 1 (L'ancien signal, on connait sa position)
+    m1_guess = (base_f_min + base_f_max) / 2.0
+    s1_guess = max(2.0, (base_f_max - base_f_min) / 4.0)
+    a1_guess = np.max(freq_profile[base_f_min:base_f_max]) if base_f_max > base_f_min else 100.0
+
+    # Cloche 2 (Le nouveau signal qui vient d'apparaître)
+    if current_f_max > base_f_max: # Empilement par le HAUT
+        m2_guess = (base_f_max + current_f_max) / 2.0
+        s2_guess = max(2.0, (current_f_max - base_f_max) / 4.0)
+        search_area = freq_profile[base_f_max:current_f_max]
+        a2_guess = np.max(search_area) if len(search_area) > 0 else 100.0
+        # On force la 2ème cloche à rester dans la partie haute !
+        bounds = (
+            [0, base_f_min - 10, 1, 0, base_f_max, 1], # Limites basses [a1, m1, s1, a2, m2, s2]
+            [260, base_f_max + 10, 100, 260, current_f_max + 10, 100]  # Limites hautes
+        )
+    else: # Empilement par le BAS
+        m2_guess = (current_f_min + base_f_min) / 2.0
+        s2_guess = max(2.0, (base_f_min - current_f_min) / 4.0)
+        search_area = freq_profile[current_f_min:base_f_min]
+        a2_guess = np.max(search_area) if len(search_area) > 0 else 100.0
+        # On force la 2ème cloche à rester dans la partie basse !
+        bounds = (
+            [0, base_f_min - 10, 1, 0, current_f_min - 10, 1],
+            [260, base_f_max + 10, 100, 260, base_f_min, 100]
+        )
+
+    p0 = [a1_guess, m1_guess, s1_guess, a2_guess, m2_guess, s2_guess]
+
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore") # Ignore les warnings d'optimisation
+            # Fit magique de scipy
+            popt, _ = curve_fit(double_gaussian, x_data, y_data, p0=p0, bounds=bounds, maxfev=1000)
+            
+        a1, m1, s1, a2, m2, s2 = popt # On récupère les paramètres des 2 cloches
+        
+        # On calcule mathématiquement la largeur du nouveau signal (cloche 2)
+        # en utilisant son écart-type (s2), peu importe ce qu'il y a en dessous !
+        spread = s2 * np.sqrt(-2 * np.log(rolloff_threshold))
+        new_f_min = max(0, int(m2 - spread))
+        new_f_max = min(len(freq_profile)-1, int(m2 + spread))
+        
+        return new_f_min, new_f_max
+
+    except RuntimeError:
+        # Fallback géométrique de secours si le fit échoue
+        if current_f_max > base_f_max:
+            return base_f_max, current_f_max
+        else:
+            return current_f_min, base_f_min
+
+def merge_precise_detections(refined_detections, smoothed_spectrogram, tolerance=15, split_threshold=30):
+    """Merge detections, with mathematical footprint subtraction for overlapping signals."""
     finished_boxes = []
     active_boxes = []
 
     for i, window_detections in enumerate(refined_detections):
         next_active_boxes = []
         used_detections = set()
+        
+        # Récupération du profil d'intensité RÉEL pour cette fenêtre temporelle
+        freq_profile = smoothed_spectrogram[:, i]
+        
+        current_window_dets = list(window_detections)
 
         for active_box in active_boxes:
             match_found = False
             
-            for j, det in enumerate(window_detections):
+            for j in range(len(current_window_dets)):
                 if j in used_detections:
                     continue
-
+                    
+                det = current_window_dets[j]
                 last_f_min = active_box['last_f_min']
                 last_f_max = active_box['last_f_max']
 
-                if (abs(det['f_min'] - last_f_min) <= tolerance and 
-                    abs(det['f_max'] - last_f_max) <= tolerance):
-                    
+                bottom_matches = abs(det['f_min'] - last_f_min) <= tolerance
+                top_matches = abs(det['f_max'] - last_f_max) <= tolerance
+
+                if bottom_matches and top_matches:
+                    # Match parfait : Le signal continue normalement
                     active_box['global_t_max'] = max(active_box['global_t_max'], det['t_max'])
                     active_box['global_f_min'] = min(active_box['global_f_min'], det['f_min'])
                     active_box['global_f_max'] = max(active_box['global_f_max'], det['f_max'])
@@ -286,13 +382,91 @@ def merge_precise_detections(refined_detections, tolerance=3):
                     next_active_boxes.append(active_box)
                     used_detections.add(j)
                     match_found = True
-                    break 
-            
+                    break
+                    
+                elif bottom_matches and not top_matches:
+                    # Le bas correspond, mais le haut a grandi -> Un signal s'est superposé au-dessus
+                    if (det['f_max'] - last_f_max) >= split_threshold:
+                        
+                        # --- MÉTHODE 2 : Ajustement mathématique (Curve Fitting) ---
+                        new_f_min, new_f_max = extract_signals_curvefit(
+                            freq_profile, last_f_min, last_f_max, det['f_min'], det['f_max']
+                        )
+                        
+                        # On verrouille le signal de base (il continue en dessous)
+                        active_box['global_t_max'] = max(active_box['global_t_max'], det['t_max'])
+                        active_box['global_f_min'] = min(active_box['global_f_min'], det['f_min'])
+                        active_box['last_f_min'] = det['f_min']
+                        active_box['last_f_max'] = last_f_max 
+                        
+                        next_active_boxes.append(active_box)
+                        used_detections.add(j)
+                        match_found = True
+                        
+                        # On injecte le nouveau signal isolé pour qu'il crée sa propre boîte
+                        current_window_dets.append({
+                            't_min': det['t_min'],
+                            't_max': det['t_max'],
+                            'f_min': new_f_min, 
+                            'f_max': new_f_max
+                        })
+                        break
+                    else:
+                        # Petit mouvement (Tolérance < X < Split) : On étire
+                        active_box['global_t_max'] = max(active_box['global_t_max'], det['t_max'])
+                        active_box['global_f_max'] = max(active_box['global_f_max'], det['f_max'])
+                        active_box['last_f_min'] = det['f_min']
+                        active_box['last_f_max'] = det['f_max']
+                        next_active_boxes.append(active_box)
+                        used_detections.add(j)
+                        match_found = True
+                        break
+
+                elif top_matches and not bottom_matches:
+                    # Le haut correspond, mais le bas a grandi -> Un signal s'est superposé en-dessous
+                    if (last_f_min - det['f_min']) >= split_threshold:
+                        
+                        # --- MÉTHODE 2 : Ajustement mathématique (Curve Fitting) ---
+                        new_f_min, new_f_max = extract_signals_curvefit(
+                            freq_profile, last_f_min, last_f_max, det['f_min'], det['f_max']
+                        )
+                        
+                        # On verrouille le signal de base (il continue au-dessus)
+                        active_box['global_t_max'] = max(active_box['global_t_max'], det['t_max'])
+                        active_box['global_f_max'] = max(active_box['global_f_max'], det['f_max'])
+                        active_box['last_f_max'] = det['f_max']
+                        active_box['last_f_min'] = last_f_min 
+                        
+                        next_active_boxes.append(active_box)
+                        used_detections.add(j)
+                        match_found = True
+                        
+                        # On injecte le nouveau signal isolé
+                        current_window_dets.append({
+                            't_min': det['t_min'],
+                            't_max': det['t_max'],
+                            'f_min': new_f_min,
+                            'f_max': new_f_max
+                        })
+                        break
+                    else:
+                        # Petit mouvement : On étire
+                        active_box['global_t_max'] = max(active_box['global_t_max'], det['t_max'])
+                        active_box['global_f_min'] = min(active_box['global_f_min'], det['f_min'])
+                        active_box['last_f_min'] = det['f_min']
+                        active_box['last_f_max'] = det['f_max']
+                        next_active_boxes.append(active_box)
+                        used_detections.add(j)
+                        match_found = True
+                        break
+                    
             if not match_found:
                 finished_boxes.append(active_box)
 
-        for j, det in enumerate(window_detections):
+        # Les signaux restants (dont ceux qu'on vient d'extraire par soustraction !) démarrent de nouvelles boîtes
+        for j in range(len(current_window_dets)):
             if j not in used_detections:
+                det = current_window_dets[j]
                 next_active_boxes.append({
                     'global_t_min': det['t_min'],
                     'global_t_max': det['t_max'],
@@ -312,11 +486,7 @@ def merge_precise_detections(refined_detections, tolerance=3):
         bx1 = box['global_t_max']
         by0 = box['global_f_min']
         by1 = box['global_f_max']
-
-        w = bx1 - bx0
-        h = by1 - by0
-
-        final_boxes.append((bx0, by0, w, h))
+        final_boxes.append((bx0, by0, bx1 - bx0, by1 - by0))
 
     return final_boxes
 
@@ -382,12 +552,12 @@ PARAMS = {
 }
 
 if __name__ == "__main__":
-    file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/baseline/debug.png"
+    file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/spectrogram_20260414_093738.png"
     compressed_spec = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
     filename = file_path.split("/")[-1].replace(".png", "")
     mean_spec = temporal_mean_spectrogram(compressed_spec, delta_t=100)
 
-    i = 20
+    i = 26
     smoothing_intensity = 0.015
     delta_t = 100
 
@@ -402,7 +572,7 @@ if __name__ == "__main__":
         mean_spectrogram=smoothed_spec,
         delta_t=delta_t,
         i=i,
-        output_path=f"/home/antoine/Documents/ICE/projet/wavelet_ice/data/test_detection/{filename}_window_{delta_t}_{i}_smooth_{smoothing_intensity}.png",
+        output_path=f"/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/{filename}_window_{delta_t}_{i}_smooth_{smoothing_intensity}.png",
     )
     gt_boxes_pixels = []
 
@@ -410,7 +580,7 @@ if __name__ == "__main__":
     ds = 500
     scale_y = img_h / PARAMS['img_height']
 
-    meta = load_metadata("/home/antoine/Documents/ICE/projet/wavelet_ice/data/baseline/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-meta")
+    meta = load_metadata("/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/west-wideband-modrec-ex4-tmpl10-20.04.sigmf-meta")
 
     gt_boxes_pixels = []
     if meta:
@@ -436,11 +606,13 @@ if __name__ == "__main__":
                 gt_boxes_pixels.append((cx, cy, cw, ch))
 
     roll_off_threshold = 0.30
-    detections_list = detect_robust_signals(smoothed_spec, rolloff_threshold=roll_off_threshold)
+    detections_list = detect_robust_signals(smoothed_spec, rolloff_threshold=roll_off_threshold, 
+                                            min_prominence=3, min_width=2, min_distance=1, max_intensity_ratio=3
+                                            )
 
-    refined = refine_temporal_borders(compressed_spec, detections_list, delta_t, time_threshold=20, time_smoothing=0.1)
+    refined = refine_temporal_borders(compressed_spec, detections_list, delta_t, time_threshold=5, time_smoothing=0.1)
 
-    boxes = merge_precise_detections(refined, delta_t)
+    boxes = merge_precise_detections(refined, tolerance=15, smoothed_spectrogram=smoothed_spec, split_threshold=1)
 
     save_visualisation_with_boxes(
         boxes=boxes,
@@ -449,11 +621,10 @@ if __name__ == "__main__":
         mean_spectrogram=smoothed_spec,
         delta_t=delta_t,
         i=i,
-        output_path=f"/home/antoine/Documents/ICE/projet/wavelet_ice/data/test_detection/{filename}_window_with_boxes_roth_{roll_off_threshold}.png",
+        output_path=f"/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/{filename}_window_{delta_t}_{i}_with_boxes_roth_{roll_off_threshold}.png",
     )
 
     out = draw_boxes(compressed_spec, boxes)
-    cv2.imwrite(f"/home/antoine/Documents/ICE/projet/wavelet_ice/data/test_detection/{filename}_merged_detections.png", out)
-
+    cv2.imwrite(f"/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/{filename}_merged_detections.png", out)
 
 
