@@ -230,9 +230,13 @@ def box_to_physical_params(box, params):
     x, y, w, h = box
     img_height = params['img_height']
     f_max = params['f_max']
+    img_width = params['img_width']
+    duration = params['duration']
 
-    t0 = float(x)
-    t1 = float(x + w)
+    time_scale = duration / img_width if img_width > 0 else 0.0
+
+    t0 = float(x * time_scale)
+    t1 = float((x + w) * time_scale)
     f1 = pixel_to_freq_linear(y, img_height, f_max)
     f0 = pixel_to_freq_linear(y + h, img_height, f_max)
 

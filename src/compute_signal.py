@@ -97,6 +97,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
         scale_y = img_h / params['img_height']
 
         gt_boxes_pixels = []
+        gt_boxes_detailed = []
         if meta:
             for ann in meta.get("annotations", []):
                 ann_start = ann['core:sample_start']
@@ -107,6 +108,9 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
 
                 y_start = freq_to_pixel_linear(ann['core:freq_upper_edge'], params['img_height'], params['f_max'])
                 y_end = freq_to_pixel_linear(ann['core:freq_lower_edge'], params['img_height'], params['f_max'])
+
+                f_upper = min(params['f_max'], float(ann['core:freq_upper_edge']))
+                f_lower = max(-params['f_max'], float(ann['core:freq_lower_edge']))
 
                 y_start = max(y_start, 0)
                 y_end = min(y_end, params['img_height'])
@@ -123,9 +127,24 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
 
                 label = ann.get('core:description', 'GT')
                 gt_boxes_pixels.append((cx, cy, cw, ch, label))
+                gt_boxes_detailed.append({
+                    'bbox': (float(cx), float(cy), float(cw), float(ch)),
+                    't0': float(x_rel),
+                    't1': float(x_end),
+                    'f0': float(f_lower),
+                    'f1': float(f_upper),
+                    'label': label,
+                })
 
         if len(gt_boxes_pixels) > 0:
-            evaluate_coco_style(boxes, gt_boxes_pixels)
+            eval_params = {
+                **params,
+                'duration': win_len,
+                'offset': win_start,
+                'img_width': img_w,
+                'img_height': img_h,
+            }
+            evaluate_coco_style(boxes, gt_boxes_detailed, params=eval_params)
         else:
             print("No ground truth available for evaluation.")
 
