@@ -474,7 +474,7 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
     ##### Métriques Hugo pour recouvrement label/prediction #####
     #### Bouding box point of view : pour chaque bbox prédite, quelle proportion de sa surface est couverte par l'union des labels GT ? ####
     label_coverage_per_box, average_label_coverage = compute_label_coverage_metrics(pred_boxes, gt_boxes)
-    report['summary']['average_label_coverage_ratio'] = float(average_label_coverage)
+    report['summary']['average_BB_coverage_ratio'] = float(average_label_coverage)
     report['summary']['Nb_BB_sans_rencouvrement'] = int(
         sum(1 for item in label_coverage_per_box if np.isclose(item['label_coverage_ratio'], 0.0))
     )   
