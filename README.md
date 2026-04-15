@@ -16,6 +16,11 @@ Then to install dependencies just run:
 pip install -e . 
 ```
 
+```sur windows
+python -m venv .venv
+source .venv/Scripts/activate 
+```
+
 You are good to go
 
 
