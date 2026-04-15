@@ -3,22 +3,24 @@
 
 ## GET STARTED 
 
-We highly recommend do set-up a virtual env using 
+We highly recommend do set-up a virtual env using, on bash : 
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate  
 ```
 
-Then to install dependencies just run: 
-
-```bash
-pip install -e . 
-```
+On windows :
 
 ```sur windows
 python -m venv .venv
 source .venv/Scripts/activate 
+```
+
+Then to install dependencies just run: 
+
+```bash
+pip install -e . 
 ```
 
 You are good to go
