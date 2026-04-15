@@ -152,7 +152,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = build_output_dir_path(output_dir, params, timestamp)
     wavelet_name = resolve_wavelet_name(params)
-    filename = f"{wavelet_name}_start_{time_window.start}_length_{time_window.length}.png"
+    filename = f"{wavelet_name}_start_{time_window.start}_length_{time_window.length}_{timestamp}.png"
     filepath = os.path.join(output_path, filename)
 
     save_viz_comparison(compressed_spec, gt_boxes_pixels, boxes, filepath, params)
