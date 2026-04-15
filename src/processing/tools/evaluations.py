@@ -177,6 +177,56 @@ def compute_label_coverage_metrics(pred_boxes, gt_boxes):
     return per_box_metrics, average_coverage_ratio
 
 
+def compute_prediction_coverage_metrics_for_labels(pred_boxes, gt_boxes):
+    """
+    Pour chaque label i, calcule :
+    aire(intersection(label_i, union(predictions))) / aire(label_i)
+    """
+    per_label_metrics = []
+
+    for gt_idx, gt_item in enumerate(gt_boxes):
+        gt_box = gt_item['bbox'] if isinstance(gt_item, dict) else gt_item
+        gt_area = float(gt_box[2] * gt_box[3])
+        overlapping_prediction_indices = []
+
+        if gt_area <= 0:
+            coverage_ratio = 0.0
+            intersection_union_area = 0.0
+        else:
+            clipped_intersections = []
+            for pred_idx, pred_box in enumerate(pred_boxes):
+                intersection_area = compute_intersection_area(gt_box, pred_box)
+                if intersection_area <= 0:
+                    continue
+
+                overlapping_prediction_indices.append(pred_idx)
+                inter_x1 = max(float(gt_box[0]), float(pred_box[0]))
+                inter_y1 = max(float(gt_box[1]), float(pred_box[1]))
+                inter_x2 = min(float(gt_box[0] + gt_box[2]), float(pred_box[0] + pred_box[2]))
+                inter_y2 = min(float(gt_box[1] + gt_box[3]), float(pred_box[1] + pred_box[3]))
+                clipped_intersections.append(
+                    (inter_x1, inter_y1, inter_x2 - inter_x1, inter_y2 - inter_y1)
+                )
+
+            intersection_union_area = compute_union_area(clipped_intersections)
+            coverage_ratio = float(intersection_union_area / gt_area)
+
+        label_type = gt_item.get('label', '') if isinstance(gt_item, dict) else ''
+        per_label_metrics.append({
+            'label_index': int(gt_idx),
+            'label_box': tuple(float(v) for v in gt_box),
+            'label_area': gt_area,
+            'intersection_with_prediction_union_area': float(intersection_union_area),
+            'prediction_coverage_ratio': float(coverage_ratio),
+            'label_type': str(label_type).strip() if str(label_type).strip() else 'aucun',
+            'prediction_indices': overlapping_prediction_indices,
+        })
+
+    average_coverage_ratio = float(np.mean([item['prediction_coverage_ratio'] for item in per_label_metrics])) if per_label_metrics else 0.0
+
+    return per_label_metrics, average_coverage_ratio
+
+
 def _match_boxes_optimal(pred_boxes, gt_boxes, iou_threshold):
     """
     Calcule un matching biparti global optimal en maximisant la somme des IoU.
@@ -444,6 +494,30 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
         )
     print(f"Moyenne recouvrement des prédictions : {average_label_coverage:.3f}")
     print(f"Nb_BB_sans_rencouvrement : {report['summary']['Nb_BB_sans_rencouvrement']}")
+
+    #### Label point of view : pour chaque label, quelle proportion de sa surface est couverte par l'union des bbox prédites ? ####
+    prediction_coverage_per_label, average_prediction_coverage = compute_prediction_coverage_metrics_for_labels(pred_boxes, gt_boxes)
+    report['summary']['average_prediction_coverage_ratio_on_labels'] = float(average_prediction_coverage)
+    report['summary']['Nb_labels_sans_recouvrement'] = int(
+        sum(1 for item in prediction_coverage_per_label if np.isclose(item['prediction_coverage_ratio'], 0.0))
+    )
+
+    print("-----------------------")
+    print("Recouvrement des labels :")
+    print("-----------------------")
+    for coverage_item in prediction_coverage_per_label:
+        summary_key = (
+            f"Label #{coverage_item['label_index']} {coverage_item['label_type']} | "
+            f"intersection(label_i, union(BB)) / aire(label_i)"
+        )
+        report['summary'][summary_key] = float(coverage_item['prediction_coverage_ratio'])
+        print(
+            f"Label #{coverage_item['label_index']} {coverage_item['label_type']} | "
+            f"intersection(label_i, union(BB)) / aire(label_i) = "
+            f"{coverage_item['prediction_coverage_ratio']:.3f}"
+        )
+    print(f"Moyenne recouvrement des labels : {average_prediction_coverage:.3f}")
+    print(f"Nb_labels_sans_recouvrement : {report['summary']['Nb_labels_sans_recouvrement']}")
 
     #### Scores détaillés pour les matches IoU >= 0.50 à 0.95 #####
     if params is not None and gt_boxes and isinstance(gt_boxes[0], dict):
