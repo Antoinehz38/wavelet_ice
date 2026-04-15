@@ -14,14 +14,12 @@ from scipy.optimize import linear_sum_assignment
 # Utilisation dossier complet :
 # python -m src.evaluate_sigmf_predictions \
 #   --pred-root ./data/benchmark \
-#   --meta-root ~/raid/spawc21_challenge_dataset/train \
-#   --output-root ./data/evaluation_reports
+#   --metaroot /raid/spawc21_challenge_dataset/train
 
 # Utilisation fichier unique :
 # python -m src.evaluate_sigmf_predictions \
 #   --prediction-json ./data/benchmark/ex1/cmor100.0-1.0_20260414_195140.json \
-#   --metadata-json ~/raid/spawc21_challenge_dataset/train/west-wideband-modrec-ex1-tmpl2-20.04.sigmf-meta \
-#   --output-json ./data/evaluation_reports/ex1/report.json
+#   --metadata /raid/spawc21_challenge_dataset/train
 
 
 
@@ -95,6 +93,10 @@ class BoxRecord:
         }
 
 
+def cli_path(value: str) -> Path:
+    return Path(value).expanduser()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -104,35 +106,31 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--pred-root",
-        type=Path,
+        type=cli_path,
         default=Path("./data/benchmark"),
         help="Dossier racine contenant les predictions dans des sous-dossiers exN.",
     )
     parser.add_argument(
         "--meta-root",
-        type=Path,
+        "--metaroot",
+        "--metadata",
+        type=cli_path,
         default=Path("~/raid/spawc21_challenge_dataset/train").expanduser(),
         help="Dossier contenant les fichiers de metadonnees .sigmf-meta.",
     )
     parser.add_argument(
-        "--output-root",
-        type=Path,
-        default=Path("./data/evaluation_reports"),
-        help="Dossier de sortie des rapports JSON.",
-    )
-    parser.add_argument(
         "--prediction-json",
-        type=Path,
+        type=cli_path,
         help="Chemin d'un seul fichier JSON de predictions a evaluer.",
     )
     parser.add_argument(
         "--metadata-json",
-        type=Path,
+        type=cli_path,
         help="Chemin du fichier .sigmf-meta a comparer avec --prediction-json.",
     )
     parser.add_argument(
         "--output-json",
-        type=Path,
+        type=cli_path,
         help="Chemin du rapport JSON en mode fichier unique.",
     )
     return parser.parse_args()
@@ -358,7 +356,7 @@ def build_box_coverage_summary(pred_boxes: list[BoxRecord], gt_boxes: list[BoxRe
 
     return {
         "average_BB_coverage_ratio": float(sum(ratios) / len(ratios)) if ratios else 0.0,
-        "Nb_BB_sans_rencouvrement": int(no_overlap),
+        "Nb_BB_sans_recouvrement": int(no_overlap),
         **details,
     }
 
@@ -432,12 +430,16 @@ def evaluate_prediction_file(prediction_path: Path, metadata_path: Path) -> dict
             )
 
         threshold_key = f"{threshold:.2f}"
+        l1_score_tot = float(sum(l1_scores)) if l1_scores else 0.0
+        l2_score_tot = float(sum(l2_scores)) if l2_scores else 0.0
         sweep_results[threshold_key] = {
             "precision": float(precision),
             "recall": float(recall),
             "f1": float(f1),
-            "avg_L1_score": float(sum(l1_scores) / len(l1_scores)) if l1_scores else None,
-            "avg_L2_score": float(sum(l2_scores) / len(l2_scores)) if l2_scores else None,
+            "avg_L1_score": float(l1_score_tot / len(l1_scores)) if l1_scores else None,
+            "avg_L2_score": float(l2_score_tot / len(l2_scores)) if l2_scores else None,
+            "L1_score_tot": l1_score_tot,
+            "L2_score_tot": l2_score_tot,
             "avg_accuracy_percent": float(sum(accuracies) / len(accuracies)) if accuracies else None,
             "matches": detailed_matches,
         }
@@ -491,19 +493,33 @@ def find_metadata_path(meta_root: Path, experiment_id: str) -> Path:
 
 def iter_prediction_files(pred_root: Path) -> Iterable[Path]:
     for path in sorted(pred_root.rglob("*.json")):
+        if path.name.endswith("_rapport.json"):
+            continue
         if EXPERIMENT_RE.search(path.parent.name) or EXPERIMENT_RE.search(path.name):
             yield path
 
 
+def build_report_path(prediction_path: Path) -> Path:
+    return prediction_path.with_name(f"{prediction_path.stem}_rapport.json")
+
+
 def evaluate_single_file(args: argparse.Namespace) -> int:
-    if args.prediction_json is None or args.metadata_json is None:
-        raise ValueError("--prediction-json et --metadata-json sont requis en mode fichier unique.")
+    if args.prediction_json is None:
+        raise ValueError("--prediction-json est requis en mode fichier unique.")
 
-    output_json = args.output_json
+    prediction_json = args.prediction_json.expanduser()
+    meta_root = args.meta_root.expanduser()
+    metadata_json = args.metadata_json.expanduser() if args.metadata_json is not None else None
+    if metadata_json is None:
+        experiment_id = extract_experiment_id(prediction_json)
+        if experiment_id is None:
+            raise RuntimeError(f"Impossible d'extraire le numero exN pour {prediction_json}")
+        metadata_json = find_metadata_path(meta_root, experiment_id)
+    output_json = args.output_json.expanduser() if args.output_json is not None else None
     if output_json is None:
-        output_json = args.output_root / f"{args.prediction_json.stem}_evaluation.json"
+        output_json = build_report_path(prediction_json)
 
-    report = evaluate_prediction_file(args.prediction_json, args.metadata_json)
+    report = evaluate_prediction_file(prediction_json, metadata_json)
     write_json(output_json, report)
     print(f"Rapport genere: {output_json}")
     return 0
@@ -512,13 +528,11 @@ def evaluate_single_file(args: argparse.Namespace) -> int:
 def evaluate_directory(args: argparse.Namespace) -> int:
     pred_root = args.pred_root.expanduser()
     meta_root = args.meta_root.expanduser()
-    output_root = args.output_root.expanduser()
 
     prediction_files = list(iter_prediction_files(pred_root))
     if not prediction_files:
         raise FileNotFoundError(f"Aucun JSON de prediction trouve dans {pred_root}")
 
-    manifest: list[dict[str, str]] = []
     for prediction_path in prediction_files:
         experiment_id = extract_experiment_id(prediction_path)
         if experiment_id is None:
@@ -526,27 +540,15 @@ def evaluate_directory(args: argparse.Namespace) -> int:
 
         metadata_path = find_metadata_path(meta_root, experiment_id)
         report = evaluate_prediction_file(prediction_path, metadata_path)
-
-        rel_parent = prediction_path.parent.relative_to(pred_root)
-        output_json = output_root / rel_parent / f"{prediction_path.stem}_evaluation.json"
+        output_json = build_report_path(prediction_path)
         write_json(output_json, report)
-        manifest.append(
-            {
-                "prediction_file": str(prediction_path),
-                "metadata_file": str(metadata_path),
-                "report_file": str(output_json),
-            }
-        )
         print(f"[ex{experiment_id}] Rapport genere: {output_json}")
-
-    write_json(output_root / "manifest.json", {"reports": manifest})
-    print(f"Manifest genere: {output_root / 'manifest.json'}")
     return 0
 
 
 def main() -> int:
     args = parse_args()
-    if args.prediction_json or args.metadata_json:
+    if args.prediction_json:
         return evaluate_single_file(args)
     return evaluate_directory(args)
 
