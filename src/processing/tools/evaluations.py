@@ -319,6 +319,7 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
             print(f"IoU >= {thresh:.2f} : {tp} valides")
 
             detailed_matches = []
+            avg_L1_score, avg_L2_score, avg_accuracy_percent = 0.0, 0.0, 0.0    
             for match in matches:
                 pred_params = enrich_physical_params(box_to_physical_params(match['pred_box'], params))
                 gt_params = enrich_physical_params(match['gt_params'])
@@ -340,22 +341,37 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
                     'iou': float(match['iou']),
                     'score_L1': score_L1(pred_params, gt_params),
                     'score_L2': score_L2(pred_params, gt_params),
+                    'accuracy_percent': score_accuracy(pred_params, gt_params),
                     'prediction': pred_params,
                     'metadata': gt_params,
                     'delta_meta_minus_prediction': deltas,
                     'delta_meta_minus_prediction_percent': deltas_percent,
                 }
                 detailed_matches.append(detailed_match)
+                avg_L1_score = avg_L1_score + detailed_match['score_L1']
+                avg_L2_score = avg_L2_score + detailed_match['score_L2']
+                avg_accuracy_percent = avg_accuracy_percent + detailed_match['accuracy_percent']
 
                 print(f"\nBBox valide #{match['pred_index']} | IoU = {match['iou']:.3f}")
                 print(f"Score L1 : {detailed_match['score_L1']:.3f}")
                 print(f"Score L2 : {detailed_match['score_L2']:.3f}")
+                print(f"Accuracy moyenne en % : {detailed_match['accuracy_percent']:.2f}%")
                 print(f"Prediction : {format_metric_values(pred_params, metric_formats)}")
                 print(f"Metadata   : {format_metric_values(gt_params, metric_formats)}")
                 print(f"Delta meta - pred : {format_metric_values(deltas, metric_formats)}")
                 print(f"Delta meta - pred (%) : {format_metric_values(deltas_percent, metric_formats, percent_suffixes)}")
 
-            valid_matches_by_iou[f"{thresh:.2f}"] = detailed_matches
+            avg_L1_score = avg_L1_score / tp if tp > 0 else None
+            avg_L2_score = avg_L2_score / tp if tp > 0 else None # on pourrait diviser par len(matches), mais je pars du principe que tp = len(matches) et que c'est plus clair de faire le lien direct
+            avg_accuracy_percent = avg_accuracy_percent / tp if tp > 0 else None
+
+            valid_matches_by_iou[f"{thresh:.2f}"] = {
+
+                "avg_L1_score": avg_L1_score,
+                "avg_L2_score": avg_L2_score,
+                "avg_accuracy_percent": avg_accuracy_percent,
+                "matches": detailed_matches,
+            }
 
         report['valid_matches_by_iou'] = valid_matches_by_iou
         report['valid_matches_iou_0_50'] = valid_matches_by_iou.get('0.50', [])
@@ -365,6 +381,17 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
         save_evaluation_json(report, output_json_path)
 
     return avg_f1, results, report
+
+
+
+def score_accuracy(pred_params, gt_params):
+    delta_t0_percent = abs(gt_params['t0'] - pred_params['t0']) / abs(gt_params['t0']) * 100 if not np.isclose(gt_params['t0'], 0.0) else 0
+    delta_t1_percent = abs(gt_params['t1'] - pred_params['t1']) / abs(gt_params['t1']) * 100 if not np.isclose(gt_params['t1'], 0.0) else 0
+    delta_f0_percent = abs(gt_params['f0'] - pred_params['f0']) / abs(gt_params['f0']) * 100 if not np.isclose(gt_params['f0'], 0.0) else 0
+    delta_f1_percent = abs(gt_params['f1'] - pred_params['f1']) / abs(gt_params['f1']) * 100 if not np.isclose(gt_params['f1'], 0.0) else 0
+
+    average_accuracy_percent = 100 - np.mean([delta_t0_percent, delta_t1_percent, delta_f0_percent, delta_f1_percent])
+    return average_accuracy_percent
 
 def score_L1(pred_params, gt_params):
     delta_t0 = abs(gt_params['t0'] - pred_params['t0'])

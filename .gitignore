@@ -44,6 +44,7 @@ datasets/
 outputs/
 results/
 notes.txt
+test.ipynb
 *.h5
 *.npz
 *.npy
