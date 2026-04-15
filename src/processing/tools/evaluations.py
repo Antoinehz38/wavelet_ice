@@ -184,6 +184,31 @@ def enrich_physical_params(params_dict):
     return enriched
 
 
+def compute_relative_percent_deltas(reference_params, deltas):
+    """Calcule les deltas relatifs en pourcentage par rapport aux metadata."""
+    percent_deltas = {}
+    for key, delta_value in deltas.items():
+        reference_value = float(reference_params[key])
+        if np.isclose(reference_value, 0.0):
+            percent_deltas[key] = None
+        else:
+            percent_deltas[key] = float((delta_value / reference_value) * 100.0)
+    return percent_deltas
+
+
+def format_metric_values(values, formats, suffix_map=None):
+    """Formate une ligne de metriques avec suffixes eventuels."""
+    rendered = []
+    for key, fmt in formats.items():
+        value = values.get(key)
+        suffix = "" if suffix_map is None else suffix_map.get(key, "")
+        if value is None:
+            rendered.append(f"{key}=n/a")
+        else:
+            rendered.append(f"{key}={value:{fmt}}{suffix}")
+    return ", ".join(rendered)
+
+
 def match_boxes_detailed(pred_boxes, gt_boxes, iou_threshold):
     """
     Associe les predictions aux verites terrain pour un seuil donne.
@@ -269,64 +294,68 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
     }
 
     if params is not None and gt_boxes and isinstance(gt_boxes[0], dict):
-        tp, fp, fn, matches = match_boxes_detailed(pred_boxes, gt_boxes, 0.5)
         print("-----------------------")
         print("Rapport métriques :")
         print("-----------------------")
         print()
         print(f"Nb pred - Nb metadata = {len(pred_boxes)} - {len(gt_boxes)} = {len(pred_boxes) - len(gt_boxes)}")
-        print(f"BBox valides (IoU >= 0.50) : {tp} | FP : {fp} | FN : {fn}")
+        metric_formats = {
+            't0': '.2f',
+            't1': '.2f',
+            'f0': '.6f',
+            'f1': '.6f',
+            'tc': '.2f',
+            'fc': '.6f',
+            'B': '.6f',
+            'D': '.2f',
+        }
+        percent_suffixes = {key: '%' for key in metric_formats}
+        valid_matches_by_iou = {}
 
-        detailed_matches = []
-        for match in matches:
-            pred_params = enrich_physical_params(box_to_physical_params(match['pred_box'], params))
-            gt_params = enrich_physical_params(match['gt_params'])
-            deltas = {
-                't0': float(gt_params['t0'] - pred_params['t0']),
-                't1': float(gt_params['t1'] - pred_params['t1']),
-                'f0': float(gt_params['f0'] - pred_params['f0']),
-                'f1': float(gt_params['f1'] - pred_params['f1']),
-                'tc': float(gt_params['tc'] - pred_params['tc']),
-                'fc': float(gt_params['fc'] - pred_params['fc']),
-                'B': float(gt_params['B'] - pred_params['B']),
-                'D': float(gt_params['D'] - pred_params['D']),
-            }
+        for thresh in iou_thresholds:
+            tp, fp, fn, matches = match_boxes_detailed(pred_boxes, gt_boxes, thresh)
+            print()
+            print(f"IoU >= {thresh:.2f} : {tp} valides | FP : {fp} | FN : {fn}")
 
-            detailed_match = {
-                'pred_index': int(match['pred_index']),
-                'gt_label': match['gt_label'],
-                'iou': float(match['iou']),
-                'prediction': pred_params,
-                'metadata': gt_params,
-                'delta_meta_minus_prediction': deltas,
-            }
-            detailed_matches.append(detailed_match)
+            detailed_matches = []
+            for match in matches:
+                pred_params = enrich_physical_params(box_to_physical_params(match['pred_box'], params))
+                gt_params = enrich_physical_params(match['gt_params'])
+                deltas = {
+                    't0': float(gt_params['t0'] - pred_params['t0']),
+                    't1': float(gt_params['t1'] - pred_params['t1']),
+                    'f0': float(gt_params['f0'] - pred_params['f0']),
+                    'f1': float(gt_params['f1'] - pred_params['f1']),
+                    'tc': float(gt_params['tc'] - pred_params['tc']),
+                    'fc': float(gt_params['fc'] - pred_params['fc']),
+                    'B': float(gt_params['B'] - pred_params['B']),
+                    'D': float(gt_params['D'] - pred_params['D']),
+                }
+                deltas_percent = compute_relative_percent_deltas(gt_params, deltas)
 
-            print(f"\nBBox valide #{match['pred_index']} | IoU = {match['iou']:.3f}")
-            print(
-                "Prediction : "
-                f"t0={pred_params['t0']:.2f}, t1={pred_params['t1']:.2f}, "
-                f"f0={pred_params['f0']:.6f}, f1={pred_params['f1']:.6f}, "
-                f"tc={pred_params['tc']:.2f}, fc={pred_params['fc']:.6f}, "
-                f"B={pred_params['B']:.6f}, D={pred_params['D']:.2f}"
-            )
-            print(
-                "Metadata   : "
-                f"t0={gt_params['t0']:.2f}, t1={gt_params['t1']:.2f}, "
-                f"f0={gt_params['f0']:.6f}, f1={gt_params['f1']:.6f}, "
-                f"tc={gt_params['tc']:.2f}, fc={gt_params['fc']:.6f}, "
-                f"B={gt_params['B']:.6f}, D={gt_params['D']:.2f}"
-            )
-            print(
-                "Delta meta - pred : "
-                f"t0={deltas['t0']:.2f}, t1={deltas['t1']:.2f}, "
-                f"f0={deltas['f0']:.6f}, f1={deltas['f1']:.6f}, "
-                f"tc={deltas['tc']:.2f}, fc={deltas['fc']:.6f}, "
-                f"B={deltas['B']:.6f}, D={deltas['D']:.2f}"
-            )
+                detailed_match = {
+                    'pred_index': int(match['pred_index']),
+                    'gt_label': match['gt_label'],
+                    'iou': float(match['iou']),
+                    'prediction': pred_params,
+                    'metadata': gt_params,
+                    'delta_meta_minus_prediction': deltas,
+                    'delta_meta_minus_prediction_percent': deltas_percent,
+                }
+                detailed_matches.append(detailed_match)
 
-        report['valid_matches_iou_0_50'] = detailed_matches
+                print(f"\nBBox valide #{match['pred_index']} | IoU = {match['iou']:.3f}")
+                print(f"Prediction : {format_metric_values(pred_params, metric_formats)}")
+                print(f"Metadata   : {format_metric_values(gt_params, metric_formats)}")
+                print(f"Delta meta - pred : {format_metric_values(deltas, metric_formats)}")
+                print(f"Delta meta - pred (%) : {format_metric_values(deltas_percent, metric_formats, percent_suffixes)}")
+
+            valid_matches_by_iou[f"{thresh:.2f}"] = detailed_matches
+
+        report['valid_matches_by_iou'] = valid_matches_by_iou
+        report['valid_matches_iou_0_50'] = valid_matches_by_iou.get('0.50', [])
     if output_json_path is not None:
+        report.setdefault('valid_matches_by_iou', {})
         report.setdefault('valid_matches_iou_0_50', [])
         save_evaluation_json(report, output_json_path)
 
