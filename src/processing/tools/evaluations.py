@@ -364,9 +364,10 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
             avg_L1_score = avg_L1_score / tp if tp > 0 else None
             avg_L2_score = avg_L2_score / tp if tp > 0 else None # on pourrait diviser par len(matches), mais je pars du principe que tp = len(matches) et que c'est plus clair de faire le lien direct
             avg_accuracy_percent = avg_accuracy_percent / tp if tp > 0 else None
-            print(f"Avegrage L1 score for IoU >= {thresh:.2f} : {avg_L1_score:.3f}" if avg_L1_score is not None else f"Avegrage L1 score for IoU >= {thresh:.2f} : n/a")
-            print(f"Avegrage L2 score for IoU >= {thresh:.2f} : {avg_L2_score:.3f}" if avg_L2_score is not None else f"Avegrage L2 score for IoU >= {thresh:.2f} : n/a")
-            print(f"Avegrage accuracy % for IoU >= {thresh:.2f} : {avg_accuracy_percent:.2f}%" if avg_accuracy_percent is not None else f"Avegrage accuracy % for IoU >= {thresh:.2f} : n/a")
+            if tp > 0:
+                print(f"Avegrage L1 score for IoU >= {thresh:.2f} : {avg_L1_score:.3f}" if avg_L1_score is not None else f"Avegrage L1 score for IoU >= {thresh:.2f} : n/a")
+                print(f"Avegrage L2 score for IoU >= {thresh:.2f} : {avg_L2_score:.3f}" if avg_L2_score is not None else f"Avegrage L2 score for IoU >= {thresh:.2f} : n/a")
+                print(f"Avegrage accuracy % for IoU >= {thresh:.2f} : {avg_accuracy_percent:.2f}%" if avg_accuracy_percent is not None else f"Avegrage accuracy % for IoU >= {thresh:.2f} : n/a")
             valid_matches_by_iou[f"{thresh:.2f}"] = {
 
                 "avg_L1_score": avg_L1_score,
