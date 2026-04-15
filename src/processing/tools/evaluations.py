@@ -49,6 +49,127 @@ def compute_iou(boxA, boxB):
     return inter_area / union_area
 
 
+def compute_intersection_area(boxA, boxB):
+    """
+    Calcule l'aire d'intersection entre deux rectangles.
+    Format attendu : (x, y, w, h)
+    """
+    xA_1, yA_1 = boxA[0], boxA[1]
+    xA_2, yA_2 = boxA[0] + boxA[2], boxA[1] + boxA[3]
+
+    xB_1, yB_1 = boxB[0], boxB[1]
+    xB_2, yB_2 = boxB[0] + boxB[2], boxB[1] + boxB[3]
+
+    inter_w = max(0.0, min(xA_2, xB_2) - max(xA_1, xB_1))
+    inter_h = max(0.0, min(yA_2, yB_2) - max(yA_1, yB_1))
+    return float(inter_w * inter_h)
+
+
+def compute_union_area(boxes):
+    """
+    Calcule l'aire de l'union d'un ensemble de rectangles axis-aligned.
+    Format attendu : iterable de (x, y, w, h)
+    """
+    if not boxes:
+        return 0.0
+
+    events = []
+    for x, y, w, h in boxes:
+        if w <= 0 or h <= 0:
+            continue
+        x1 = float(x)
+        x2 = float(x + w)
+        y1 = float(y)
+        y2 = float(y + h)
+        if x2 <= x1 or y2 <= y1:
+            continue
+        events.append((x1, 1, y1, y2))
+        events.append((x2, -1, y1, y2))
+
+    if not events:
+        return 0.0
+
+    events.sort(key=lambda item: item[0])
+    active_intervals = []
+    previous_x = events[0][0]
+    union_area = 0.0
+    index = 0
+
+    while index < len(events):
+        current_x = events[index][0]
+        delta_x = current_x - previous_x
+
+        if delta_x > 0 and active_intervals:
+            active_intervals_sorted = sorted(active_intervals, key=lambda interval: interval[0])
+            covered_y = 0.0
+            current_y1, current_y2 = active_intervals_sorted[0]
+            for y1, y2 in active_intervals_sorted[1:]:
+                if y1 > current_y2:
+                    covered_y += current_y2 - current_y1
+                    current_y1, current_y2 = y1, y2
+                else:
+                    current_y2 = max(current_y2, y2)
+            covered_y += current_y2 - current_y1
+            union_area += delta_x * covered_y
+
+        while index < len(events) and events[index][0] == current_x:
+            _, event_type, y1, y2 = events[index]
+            interval = (y1, y2)
+            if event_type == 1:
+                active_intervals.append(interval)
+            else:
+                active_intervals.remove(interval)
+            index += 1
+
+        previous_x = current_x
+
+    return float(union_area)
+
+
+def compute_label_coverage_metrics(pred_boxes, gt_boxes):
+    """
+    Pour chaque bbox predite, calcule :
+    aire(intersection(BB_i, union(labels))) / aire(BB_i)
+    """
+    gt_bboxes = [gt['bbox'] if isinstance(gt, dict) else gt for gt in gt_boxes]
+    per_box_metrics = []
+
+    for pred_idx, pred_box in enumerate(pred_boxes):
+        pred_area = float(pred_box[2] * pred_box[3])
+        if pred_area <= 0:
+            coverage_ratio = 0.0
+            intersection_union_area = 0.0
+        else:
+            clipped_intersections = []
+            for gt_box in gt_bboxes:
+                intersection_area = compute_intersection_area(pred_box, gt_box)
+                if intersection_area <= 0:
+                    continue
+
+                inter_x1 = max(float(pred_box[0]), float(gt_box[0]))
+                inter_y1 = max(float(pred_box[1]), float(gt_box[1]))
+                inter_x2 = min(float(pred_box[0] + pred_box[2]), float(gt_box[0] + gt_box[2]))
+                inter_y2 = min(float(pred_box[1] + pred_box[3]), float(gt_box[1] + gt_box[3]))
+                clipped_intersections.append(
+                    (inter_x1, inter_y1, inter_x2 - inter_x1, inter_y2 - inter_y1)
+                )
+
+            intersection_union_area = compute_union_area(clipped_intersections)
+            coverage_ratio = float(intersection_union_area / pred_area)
+
+        per_box_metrics.append({
+            'pred_index': int(pred_idx),
+            'pred_box': tuple(float(v) for v in pred_box),
+            'pred_area': pred_area,
+            'intersection_with_label_union_area': float(intersection_union_area),
+            'label_coverage_ratio': float(coverage_ratio),
+        })
+
+    average_coverage_ratio = float(np.mean([item['label_coverage_ratio'] for item in per_box_metrics])) if per_box_metrics else 0.0
+
+    return per_box_metrics, average_coverage_ratio
+
+
 def _match_boxes_optimal(pred_boxes, gt_boxes, iou_threshold):
     """
     Calcule un matching biparti global optimal en maximisant la somme des IoU.
@@ -293,6 +414,23 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
         },
     }
 
+    ##### Métriques Hugo pour recouvrement label/prediction #####
+    label_coverage_per_box, average_label_coverage = compute_label_coverage_metrics(pred_boxes, gt_boxes)
+    report['summary']['average_label_coverage_ratio'] = float(average_label_coverage)
+    report['label_coverage_per_prediction'] = label_coverage_per_box
+
+    print("-----------------------")
+    print("Recouvrement labels/predictions :")
+    print("-----------------------")
+    for coverage_item in label_coverage_per_box:
+        print(
+            f"BBox #{coverage_item['pred_index']} | "
+            f"intersection(BB_i, union(labels)) / aire(BB_i) = "
+            f"{coverage_item['label_coverage_ratio']:.3f}"
+        )
+    print(f"Moyenne recouvrement label/prediction : {average_label_coverage:.3f}")
+
+    #### Scores détaillés pour les matches IoU >= 0.50 à 0.95 #####
     if params is not None and gt_boxes and isinstance(gt_boxes[0], dict):
         print("-----------------------")
         print("Rapport métriques :")
