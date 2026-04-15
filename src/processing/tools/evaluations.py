@@ -338,6 +338,8 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
                     'pred_index': int(match['pred_index']),
                     'gt_label': match['gt_label'],
                     'iou': float(match['iou']),
+                    'score_L1': score_L1(pred_params, gt_params),
+                    'score_L2': score_L2(pred_params, gt_params),
                     'prediction': pred_params,
                     'metadata': gt_params,
                     'delta_meta_minus_prediction': deltas,
@@ -346,6 +348,8 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
                 detailed_matches.append(detailed_match)
 
                 print(f"\nBBox valide #{match['pred_index']} | IoU = {match['iou']:.3f}")
+                print(f"Score L1 : {detailed_match['score_L1']:.3f}")
+                print(f"Score L2 : {detailed_match['score_L2']:.3f}")
                 print(f"Prediction : {format_metric_values(pred_params, metric_formats)}")
                 print(f"Metadata   : {format_metric_values(gt_params, metric_formats)}")
                 print(f"Delta meta - pred : {format_metric_values(deltas, metric_formats)}")
@@ -361,6 +365,20 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
         save_evaluation_json(report, output_json_path)
 
     return avg_f1, results, report
+
+def score_L1(pred_params, gt_params):
+    delta_t0 = abs(gt_params['t0'] - pred_params['t0'])
+    delta_t1 = abs(gt_params['t1'] - pred_params['t1'])
+    delta_f0 = abs(gt_params['f0'] - pred_params['f0'])
+    delta_f1 = abs(gt_params['f1'] - pred_params['f1'])
+    return delta_t0 + delta_t1 + delta_f0 + delta_f1
+
+def score_L2(pred_params, gt_params):
+    delta_t0 = gt_params['t0'] - pred_params['t0']
+    delta_t1 = gt_params['t1'] - pred_params['t1']
+    delta_f0 = gt_params['f0'] - pred_params['f0']
+    delta_f1 = gt_params['f1'] - pred_params['f1']
+    return np.sqrt(delta_t0**2 + delta_t1**2 + delta_f0**2 + delta_f1**2)   
 
 # ---------------------------------------------------------------------------
 # Merging boxes from multiple analysis windows
