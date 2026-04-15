@@ -302,11 +302,11 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
         metric_formats = {
             't0': '.2f',
             't1': '.2f',
-            'f0': '.6f',
-            'f1': '.6f',
+            'f0': '.4f',
+            'f1': '.4f',
             'tc': '.2f',
-            'fc': '.6f',
-            'B': '.6f',
+            'fc': '.4f',
+            'B': '.4f',
             'D': '.2f',
         }
         percent_suffixes = {key: '%' for key in metric_formats}
@@ -315,7 +315,8 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
         for thresh in iou_thresholds:
             tp, fp, fn, matches = match_boxes_detailed(pred_boxes, gt_boxes, thresh)
             print()
-            print(f"IoU >= {thresh:.2f} : {tp} valides | FP : {fp} | FN : {fn}")
+            print("" + "-"*30)
+            print(f"IoU >= {thresh:.2f} : {tp} valides")
 
             detailed_matches = []
             for match in matches:

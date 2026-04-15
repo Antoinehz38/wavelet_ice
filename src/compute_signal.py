@@ -84,6 +84,7 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
 
     boxes = []
     gt_boxes_pixels = []
+    gt_boxes_detailed = []
     if params.get('addPrediction', False):
         print("Adding prediction...")
 
@@ -135,7 +136,15 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
                     'f1': float(f_upper),
                     'label': label,
                 })
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = build_output_dir_path(output_dir, params, timestamp)
+    wavelet_name = resolve_wavelet_name(params)
+    filename = f"{wavelet_name}_start_{time_window.start}_length_{time_window.length}_{timestamp}.png"
+    filepath = os.path.join(output_path, filename)
 
+    save_viz_comparison(compressed_spec, gt_boxes_pixels, boxes, filepath, params)
+
+    if params.get('addPrediction', False):
         if len(gt_boxes_pixels) > 0:
             eval_params = {
                 **params,
@@ -144,18 +153,15 @@ def run_signal_processing_pipeline(input_file: str, meta: dict, output_dir: str,
                 'img_width': img_w,
                 'img_height': img_h,
             }
-            evaluate_coco_style(boxes, gt_boxes_detailed, params=eval_params)
+            output_json_path = os.path.splitext(filepath)[0] + ".json"
+            evaluate_coco_style(
+                boxes,
+                gt_boxes_detailed,
+                params=eval_params,
+                output_json_path=output_json_path,
+            )
         else:
             print("No ground truth available for evaluation.")
-
-    
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = build_output_dir_path(output_dir, params, timestamp)
-    wavelet_name = resolve_wavelet_name(params)
-    filename = f"{wavelet_name}_start_{time_window.start}_length_{time_window.length}_{timestamp}.png"
-    filepath = os.path.join(output_path, filename)
-
-    save_viz_comparison(compressed_spec, gt_boxes_pixels, boxes, filepath, params)
 
     img_w = compressed_spec.shape[1]
     img_h = compressed_spec.shape[0]
