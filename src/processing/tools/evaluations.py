@@ -415,12 +415,19 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
     }
 
     ##### Métriques Hugo pour recouvrement label/prediction #####
+    #### Bouding box point of view : pour chaque bbox prédite, quelle proportion de sa surface est couverte par l'union des labels GT ? ####
     label_coverage_per_box, average_label_coverage = compute_label_coverage_metrics(pred_boxes, gt_boxes)
     report['summary']['average_label_coverage_ratio'] = float(average_label_coverage)
+    report['label_coverage_metrics'] = {
+        'definition': 'area(intersection(BB_i, union(labels))) / area(BB_i)',
+        'average_label_coverage_ratio': float(average_label_coverage),
+        'per_prediction': label_coverage_per_box,
+    }
+    # Compatibilite avec les premiers essais de structure JSON.
     report['label_coverage_per_prediction'] = label_coverage_per_box
 
     print("-----------------------")
-    print("Recouvrement labels/predictions :")
+    print("Recouvrement des prédictions :")
     print("-----------------------")
     for coverage_item in label_coverage_per_box:
         print(
@@ -428,7 +435,7 @@ def evaluate_coco_style(pred_boxes, gt_boxes, params=None, output_json_path=None
             f"intersection(BB_i, union(labels)) / aire(BB_i) = "
             f"{coverage_item['label_coverage_ratio']:.3f}"
         )
-    print(f"Moyenne recouvrement label/prediction : {average_label_coverage:.3f}")
+    print(f"Moyenne recouvrement des prédictions : {average_label_coverage:.3f}")
 
     #### Scores détaillés pour les matches IoU >= 0.50 à 0.95 #####
     if params is not None and gt_boxes and isinstance(gt_boxes[0], dict):
