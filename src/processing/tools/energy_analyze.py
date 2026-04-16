@@ -221,7 +221,7 @@ def make_metrics(compressed_spec, gt_boxes_pixels, margin_ratio=0.2):
     for box_coords, label in gt_boxes_pixels:
         metrics = calculate_bleed_metrics_multi(
             image=compressed_spec, target_box=box_coords, 
-            all_boxes=all_boxes, margin_ratio=margin_ratio
+            all_boxes=all_boxes
         )
         
         stats[label]['b_x'].append(metrics['bleed_x'])
