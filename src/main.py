@@ -11,6 +11,7 @@ from src.helpers.parser import parse_args
 from src.processing.tools.loaders import ensure_dir, load_metadata
 from src.processing.tools.evaluations import merge_boxes
 from src.processing.tools.energy_analyze import analyze_energy_dataset
+from src.processing.tools.analyse_energy import make_pipeline_analyse_energy
 from src.helpers.display import print_transformation_params
 
 
@@ -75,7 +76,7 @@ def main()->None:
         input_folder = str(args.analyzeEnergyOnFolder)
         output_folder = os.path.join(input_folder, "energy_analysis")
         ensure_dir(output_folder)
-        analyze_energy_dataset(input_folder, output_folder)
+        make_pipeline_analyse_energy(input_folder, output_folder)
         return None
     
     if args.runOnlyAnalyzeOnFolder:

@@ -107,6 +107,16 @@ def generer_rapports(df, dossier_sortie="rapports"):
 
     print(f"✅ Analyse terminée ! Les graphiques ont été sauvegardés dans le dossier : '{dossier_sortie}'")
 
+def make_pipeline_analyse_energy(dossier_racine, dossier_sortie="rapports"):
+    print(f"Extraction des données depuis {dossier_racine}...")
+    df_donnees = charger_donnees(dossier_racine)
+    
+    if not df_donnees.empty:
+        print("Génération des graphiques en cours...")
+        generer_rapports(df_donnees, dossier_sortie)
+    else:
+        print("Aucune donnée à analyser.")
+
 if __name__ == "__main__":
     # Paramétrage de la ligne de commande
     parser = argparse.ArgumentParser(description="Analyse des métriques d'énergie par transformation et modulation.")
