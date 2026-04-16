@@ -116,7 +116,7 @@ def main()->None:
                 print(f"\n  -> Analyse de la transformation : [{transform_name}] ({len(path_list)} images)")
                 transform_report = analyze_energy_dataset(path_list, meta_path)
 
-                with open(os.path.join(complete_signal_folder, f"{wavelet_name}_energy.json"), "w") as f:
+                with open(os.path.join(complete_signal_folder, f"{transform_name}_energy.json"), "w") as f:
                     json.dump(transform_report, f, indent=4)
 
         return None
