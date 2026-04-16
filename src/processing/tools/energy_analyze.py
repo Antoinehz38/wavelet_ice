@@ -108,119 +108,160 @@ def analyze_energy_on_one_image(file_path, meta_path, debug=False):
     gt_boxes_pixels = bbox_from_meta(meta_path, window_start, window_end, ds, scale_y)
 
 
-    metrics = make_metrics(compressed_spec, gt_boxes_pixels)
+    metrics = make_metrics(compressed_spec, gt_boxes_pixels, debug=debug)
 
     if debug == True:
         out = draw_boxes(compressed_spec, gt_boxes_pixels)
-        cv2.imwrite('energy.png', out)
+        cv2.imwrite('energy_plus.png', out)
     
 
     return metrics
 
 
-def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio_bleed=0.2, margin_ratio_underfill=0.05, roll_off_tolerance=0.05):
+import numpy as np
+
+import numpy as np
+import cv2
+
+def calculate_bleed_metrics_multi(image, target_box, all_boxes, time_margin=50, 
+                                  freq_bleed_ratio=1.5, margin_ratio_underfill=0.05, 
+                                  roll_off_tolerance=0.05, debug=False):
     x, y, w, h = [int(v) for v in target_box]
     img_h, img_w = image.shape
 
-    x1, y1 = max(0, x), max(0, y)
-    x2, y2 = min(img_w, x + w), min(img_h, y + h)
-    
     empty_metrics = {
         'bleed_x': 0.0, 'bleed_y': 0.0, 'bleed_overall': 0.0,
         'underfill_x': 1.0, 'underfill_y': 1.0, 'underfill_overall': 1.0
     }
-
-    if x2 <= x1 or y2 <= y1:
+    
+    if w <= 0 or h <= 0 or x >= img_w or y >= img_h:
         return empty_metrics
 
-    # Mask out other signal boxes
-    valid_mask = np.ones((img_h, img_w), dtype=bool)
+    # 1. DÉCOUPAGE DE LA ROI (Spatio-Temporelle)
+    freq_margin = int(h * freq_bleed_ratio)
+    
+    x1_roi = max(0, x - time_margin)
+    x2_roi = min(img_w, x + w + time_margin)
+    y1_roi = max(0, y - freq_margin)
+    y2_roi = min(img_h, y + h + freq_margin)
+
+    # Extraction de la sous-image locale
+    roi_image = image[y1_roi:y2_roi, x1_roi:x2_roi]
+    roi_h, roi_w = roi_image.shape
+
+    # Recalibrage des coordonnées de la cible dans le nouveau repère de la ROI
+    cx = x - x1_roi
+    cy = y - y1_roi
+
+    # 2. MASQUAGE DES VOISINS DANS LA ROI
+    bg_mask = np.ones((roi_h, roi_w), dtype=bool)
+    bleed_mask = np.ones((roi_h, roi_w), dtype=bool)
+
     for box in all_boxes:
         if box == target_box: continue
         bx, by, bw, bh = [int(v) for v in box]
-        bx1, by1 = max(0, bx), max(0, by)
-        bx2, by2 = min(img_w, bx + bw), min(img_h, by + bh)
-        valid_mask[by1:by2, bx1:bx2] = False
+        
+        # Vérifier si la boîte voisine intersecte notre ROI
+        if bx < x2_roi and (bx + bw) > x1_roi and by < y2_roi and (by + bh) > y1_roi:
+            # Conversion des coordonnées du voisin dans le repère de la ROI
+            bx1_roi = max(0, bx - x1_roi)
+            by1_roi = max(0, by - y1_roi)
+            bx2_roi = min(roi_w, bx + bw - x1_roi)
+            by2_roi = min(roi_h, by + bh - y1_roi)
+            
+            # Masquer le voisin
+            bg_mask[by1_roi:by2_roi, bx1_roi:bx2_roi] = False
+            bleed_mask[by1_roi:by2_roi, bx1_roi:bx2_roi] = False
 
-    # Estimate background noise level
-    bg_pixels = image[valid_mask]
-    bg_level = np.median(bg_pixels) if len(bg_pixels) > 0 else np.median(image)
+    # Retirer également la boîte cible du bg_mask pour avoir le vrai bruit de fond
+    bg_mask[max(0, cy):min(roi_h, cy+h), max(0, cx):min(roi_w, cx+w)] = False
 
-    inside_roi = image[y1:y2, x1:x2]
-    mean_in = np.mean(inside_roi) - bg_level
-    if mean_in <= 0:
-        return empty_metrics
+    # --- BLOC DE DEBUG (Sauvegarde de l'image masquée) ---
+    if debug:
+        # On copie l'image ROI pour ne pas altérer les vraies données
+        image_masqued = roi_image.copy()
+        
+        # On met en noir tout ce qui a été exclu par le bleed_mask (les signaux voisins)
+        image_masqued[~bleed_mask] = 0
+        
+        # Optionnel mais pratique : dessiner un rectangle clair (valeur 255) autour de notre cible
+        cv2.rectangle(image_masqued, (cx, cy), (cx + w, cy + h), (255), 1)
 
-    # --- Underfill Calculation (with roll-off tolerance) ---
-    margin_h_in = max(1, int((y2 - y1) * margin_ratio_underfill))
-    margin_w_in = max(1, int((x2 - x1) * margin_ratio_underfill))
+        filename = f"mask_{np.random.uniform(0, 1):.4f}.png"
+        cv2.imwrite(filename, image_masqued)
+    # -----------------------------------------------------
+
+    # 3. CALCUL DU BRUIT DE FOND LOCAL
+    bg_pixels = roi_image[bg_mask]
+    bg_level = np.median(bg_pixels) if len(bg_pixels) > 0 else np.median(roi_image)
+
+    # 4. CALCUL DE L'ÉNERGIE INTERNE (Cible)
+    inside_pixels = roi_image[max(0, cy):min(roi_h, cy+h), max(0, cx):min(roi_w, cx+w)]
+    mean_in = np.mean(inside_pixels) - bg_level
+    if mean_in <= 0: return empty_metrics
+
+    # --- 5. CALCUL UNDERFILL (Vide interne) ---
+    margin_h_in = max(1, int(h * margin_ratio_underfill))
+    margin_w_in = max(1, int(w * margin_ratio_underfill))
     
-    core_y1, core_y2 = min(y1 + margin_h_in, y2), max(y2 - margin_h_in, y1)
-    core_x1, core_x2 = min(x1 + margin_w_in, x2), max(x2 - margin_w_in, x1)
+    core_y1, core_y2 = min(cy + margin_h_in, cy + h), max(cy + h - margin_h_in, cy)
+    core_x1, core_x2 = min(cx + margin_w_in, cx + w), max(cx + w - margin_w_in, cx)
     
-    core_roi = image[core_y1:core_y2, core_x1:core_x2]
+    core_roi = roi_image[core_y1:core_y2, core_x1:core_x2]
     mean_core = np.mean(core_roi) - bg_level if core_roi.size > 0 else mean_in
-    mean_core = max(1e-5, mean_core)
-    
-    in_top = image[y1:core_y1, x1:x2].flatten()
-    in_bottom = image[core_y2:y2, x1:x2].flatten()
-    in_y_pixels = np.concatenate([in_top, in_bottom])
+    threshold = max(1e-5, mean_core) * roll_off_tolerance
+
+    # Bords verticaux (Haut/Bas)
+    in_y_pixels = np.concatenate([
+        roi_image[cy:core_y1, cx:cx+w].flatten(), 
+        roi_image[core_y2:cy+h, cx:cx+w].flatten()
+    ])
     mean_in_y = np.mean(in_y_pixels) - bg_level if in_y_pixels.size > 0 else mean_in
     
-    in_left = image[core_y1:core_y2, x1:core_x1].flatten()
-    in_right = image[core_y1:core_y2, core_x2:x2].flatten()
-    in_x_pixels = np.concatenate([in_left, in_right])
+    # Bords horizontaux (Gauche/Droite)
+    in_x_pixels = np.concatenate([
+        roi_image[core_y1:core_y2, cx:core_x1].flatten(), 
+        roi_image[core_y1:core_y2, core_x2:cx+w].flatten()
+    ])
     mean_in_x = np.mean(in_x_pixels) - bg_level if in_x_pixels.size > 0 else mean_in
-    
-    in_all_pixels = np.concatenate([in_y_pixels, in_x_pixels])
-    mean_in_overall = np.mean(in_all_pixels) - bg_level if in_all_pixels.size > 0 else mean_in
 
-    threshold = mean_core * roll_off_tolerance
+    underfill_y = 1.0 - min(1.0, max(0, mean_in_y) / threshold)
+    underfill_x = 1.0 - min(1.0, max(0, mean_in_x) / threshold)
     
-    fill_ratio_y = min(1.0, max(0, mean_in_y) / threshold)
-    fill_ratio_x = min(1.0, max(0, mean_in_x) / threshold)
-    fill_ratio_overall = min(1.0, max(0, mean_in_overall) / threshold)
+    # --- 6. CALCUL BLEED (Bavement externe) ---
+    y_pixels_out, x_pixels_out = [], []
     
-    underfill_y = 1.0 - fill_ratio_y
-    underfill_x = 1.0 - fill_ratio_x
-    underfill_overall = 1.0 - fill_ratio_overall
+    # Extraction du bleed Y en utilisant le masque pour ignorer les éventuels voisins
+    if cy > 0:
+        top_roi = roi_image[0:cy, cx:cx+w]
+        y_pixels_out.extend(top_roi[bleed_mask[0:cy, cx:cx+w]])
+    if cy + h < roi_h:
+        bot_roi = roi_image[cy+h:roi_h, cx:cx+w]
+        y_pixels_out.extend(bot_roi[bleed_mask[cy+h:roi_h, cx:cx+w]])
 
-    # --- Bleed Calculation ---
-    margin_h = max(1, int(h * margin_ratio_bleed))
-    margin_w = max(1, int(w * margin_ratio_bleed))
-    
-    y_pixels, x_pixels = [], []
-    
-    if y1 > 0:
-        top_roi, top_mask = image[max(0, y1 - margin_h):y1, x1:x2], valid_mask[max(0, y1 - margin_h):y1, x1:x2]
-        y_pixels.extend(top_roi[top_mask]) 
-    if y2 < img_h:
-        bot_roi, bot_mask = image[y2:min(img_h, y2 + margin_h), x1:x2], valid_mask[y2:min(img_h, y2 + margin_h), x1:x2]
-        y_pixels.extend(bot_roi[bot_mask])
+    # Extraction du bleed X
+    if cx > 0:
+        left_roi = roi_image[cy:cy+h, 0:cx]
+        x_pixels_out.extend(left_roi[bleed_mask[cy:cy+h, 0:cx]])
+    if cx + w < roi_w:
+        right_roi = roi_image[cy:cy+h, cx+w:roi_w]
+        x_pixels_out.extend(right_roi[bleed_mask[cy:cy+h, cx+w:roi_w]])
 
-    if x1 > 0:
-        left_roi, left_mask = image[y1:y2, max(0, x1 - margin_w):x1], valid_mask[y1:y2, max(0, x1 - margin_w):x1]
-        x_pixels.extend(left_roi[left_mask])
-    if x2 < img_w:
-        right_roi, right_mask = image[y1:y2, x2:min(img_w, x2 + margin_w)], valid_mask[y1:y2, x2:min(img_w, x2 + margin_w)]
-        x_pixels.extend(right_roi[right_mask])
-
-    mean_out_y = np.mean(y_pixels) - bg_level if len(y_pixels) > 0 else 0
-    mean_out_x = np.mean(x_pixels) - bg_level if len(x_pixels) > 0 else 0
-    
-    all_pixels_out = y_pixels + x_pixels
-    mean_out_overall = np.mean(all_pixels_out) - bg_level if len(all_pixels_out) > 0 else 0
+    mean_out_y = np.mean(y_pixels_out) - bg_level if len(y_pixels_out) > 0 else 0
+    mean_out_x = np.mean(x_pixels_out) - bg_level if len(x_pixels_out) > 0 else 0
+    all_out = y_pixels_out + x_pixels_out
+    mean_out_all = np.mean(all_out) - bg_level if len(all_out) > 0 else 0
 
     return {
         'bleed_x': max(0, mean_out_x) / mean_in,
         'bleed_y': max(0, mean_out_y) / mean_in,
-        'bleed_overall': max(0, mean_out_overall) / mean_in,
+        'bleed_overall': max(0, mean_out_all) / mean_in,
         'underfill_x': underfill_x,
         'underfill_y': underfill_y,
-        'underfill_overall': underfill_overall
+        'underfill_overall': (underfill_x + underfill_y) / 2
     }
 
-def make_metrics(compressed_spec, gt_boxes_pixels, margin_ratio=0.2):
+def make_metrics(compressed_spec, gt_boxes_pixels, margin_ratio=0.2, debug=False):
     all_boxes = [item[0] for item in gt_boxes_pixels]
     
     stats = defaultdict(lambda: {
@@ -231,7 +272,7 @@ def make_metrics(compressed_spec, gt_boxes_pixels, margin_ratio=0.2):
     for box_coords, label in gt_boxes_pixels:
         metrics = calculate_bleed_metrics_multi(
             image=compressed_spec, target_box=box_coords, 
-            all_boxes=all_boxes
+            all_boxes=all_boxes, debug=debug
         )
         
         stats[label]['b_x'].append(metrics['bleed_x'])
@@ -316,12 +357,12 @@ def analyze_energy_dataset(image_path_list, meta_path):
 
 if __name__ == "__main__":
     # Exemple d'utilisation
-    file_path = "/home/antoine/Downloads/raw_Bump_start_1628831_length_1000000.png"
-    meta_path = "/home/antoine/Downloads/west-wideband-modrec-ex100-tmpl15-20.04.sigmf-meta"
+    file_path = "/home/antoine/Downloads/raw_STFT_start_0_length_1000000.png"
+    meta_path = "/home/antoine/Downloads/west-wideband-modrec-ex1-tmpl2-20.04.sigmf-meta"
     print('=== Analyse du fichier 1 ===')
     print(analyze_energy_on_one_image(file_path, meta_path, debug=True))
 
-    file_path = "/home/antoine/Downloads/raw_Bump_start_0_length_1000000.png"
-    meta_path = "/home/antoine/Downloads/west-wideband-modrec-ex29-tmpl8-20.04.sigmf-meta"
+    file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/raw_Raised_Cosine_start_106028_length_1000000.png"
+    meta_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/baseline/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-meta"
     print('\n=== Analyse du fichier 2 ===')
-    print(analyze_energy_on_one_image(file_path, meta_path, debug=True))
+    print(analyze_energy_on_one_image(file_path, meta_path, debug=False))
