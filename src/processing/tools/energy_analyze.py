@@ -85,7 +85,7 @@ def draw_boxes(gray, boxes):
     return out
 
 
-def analyze_energy_on_one_image(file_path, meta_path):
+def analyze_energy_on_one_image(file_path, meta_path, debug=False):
     filename = os.path.basename(file_path)
     match = re.search(r'start_(\d+)_length_(\d+)', filename)
     if not match:
@@ -109,14 +109,16 @@ def analyze_energy_on_one_image(file_path, meta_path):
 
 
     metrics = make_metrics(compressed_spec, gt_boxes_pixels)
+
+    if debug == True:
+        out = draw_boxes(compressed_spec, gt_boxes_pixels)
+        cv2.imwrite('energy.png', out)
     
 
     return metrics
 
 
-
-def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio_bleed=0.2, margin_ratio_underfill=0.05):
-
+def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio_bleed=0.2, margin_ratio_underfill=0.05, roll_off_tolerance=0.05):
     x, y, w, h = [int(v) for v in target_box]
     img_h, img_w = image.shape
 
@@ -131,6 +133,7 @@ def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio_ble
     if x2 <= x1 or y2 <= y1:
         return empty_metrics
 
+    # Mask out other signal boxes
     valid_mask = np.ones((img_h, img_w), dtype=bool)
     for box in all_boxes:
         if box == target_box: continue
@@ -139,14 +142,16 @@ def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio_ble
         bx2, by2 = min(img_w, bx + bw), min(img_h, by + bh)
         valid_mask[by1:by2, bx1:bx2] = False
 
+    # Estimate background noise level
     bg_pixels = image[valid_mask]
     bg_level = np.median(bg_pixels) if len(bg_pixels) > 0 else np.median(image)
 
     inside_roi = image[y1:y2, x1:x2]
     mean_in = np.mean(inside_roi) - bg_level
     if mean_in <= 0:
-        return empty_metrics # Si la boîte est vide/plus sombre que le fond
+        return empty_metrics
 
+    # --- Underfill Calculation (with roll-off tolerance) ---
     margin_h_in = max(1, int((y2 - y1) * margin_ratio_underfill))
     margin_w_in = max(1, int((x2 - x1) * margin_ratio_underfill))
     
@@ -155,7 +160,7 @@ def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio_ble
     
     core_roi = image[core_y1:core_y2, core_x1:core_x2]
     mean_core = np.mean(core_roi) - bg_level if core_roi.size > 0 else mean_in
-    mean_core = max(1e-5, mean_core) # Sécurité division par zéro
+    mean_core = max(1e-5, mean_core)
     
     in_top = image[y1:core_y1, x1:x2].flatten()
     in_bottom = image[core_y2:y2, x1:x2].flatten()
@@ -167,14 +172,20 @@ def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio_ble
     in_x_pixels = np.concatenate([in_left, in_right])
     mean_in_x = np.mean(in_x_pixels) - bg_level if in_x_pixels.size > 0 else mean_in
     
-    underfill_y = max(0.0, 1.0 - (max(0, mean_in_y) / mean_core))
-    underfill_x = max(0.0, 1.0 - (max(0, mean_in_x) / mean_core))
-    
     in_all_pixels = np.concatenate([in_y_pixels, in_x_pixels])
     mean_in_overall = np.mean(in_all_pixels) - bg_level if in_all_pixels.size > 0 else mean_in
-    underfill_overall = max(0.0, 1.0 - (max(0, mean_in_overall) / mean_core))
 
+    threshold = mean_core * roll_off_tolerance
+    
+    fill_ratio_y = min(1.0, max(0, mean_in_y) / threshold)
+    fill_ratio_x = min(1.0, max(0, mean_in_x) / threshold)
+    fill_ratio_overall = min(1.0, max(0, mean_in_overall) / threshold)
+    
+    underfill_y = 1.0 - fill_ratio_y
+    underfill_x = 1.0 - fill_ratio_x
+    underfill_overall = 1.0 - fill_ratio_overall
 
+    # --- Bleed Calculation ---
     margin_h = max(1, int(h * margin_ratio_bleed))
     margin_w = max(1, int(w * margin_ratio_bleed))
     
@@ -208,7 +219,6 @@ def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio_ble
         'underfill_y': underfill_y,
         'underfill_overall': underfill_overall
     }
-
 
 def make_metrics(compressed_spec, gt_boxes_pixels, margin_ratio=0.2):
     all_boxes = [item[0] for item in gt_boxes_pixels]
@@ -309,9 +319,9 @@ if __name__ == "__main__":
     file_path = "/home/antoine/Downloads/raw_Bump_start_1628831_length_1000000.png"
     meta_path = "/home/antoine/Downloads/west-wideband-modrec-ex100-tmpl15-20.04.sigmf-meta"
     print('=== Analyse du fichier 1 ===')
-    print(analyze_energy_on_one_image(file_path, meta_path))
+    print(analyze_energy_on_one_image(file_path, meta_path, debug=True))
 
     file_path = "/home/antoine/Downloads/raw_Bump_start_0_length_1000000.png"
-    meta_path = "/home/antoine/Downloads/west-wideband-modrec-ex1-tmpl2-20.04.sigmf-meta"
+    meta_path = "/home/antoine/Downloads/west-wideband-modrec-ex29-tmpl8-20.04.sigmf-meta"
     print('\n=== Analyse du fichier 2 ===')
-    print(analyze_energy_on_one_image(file_path, meta_path))
+    print(analyze_energy_on_one_image(file_path, meta_path, debug=True))
