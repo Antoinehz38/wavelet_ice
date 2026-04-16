@@ -118,10 +118,94 @@ def analyze_energy_on_one_image(file_path, meta_path, debug=False):
     return metrics
 
 
-import numpy as np
+def make_filtre(image, target_box, all_boxes, time_margin, freq_bleed_ratio, debug=False):
+    x, y, w, h = [int(v) for v in target_box]
+    img_h, img_w = image.shape
+    
+    freq_margin = int(h * freq_bleed_ratio)
+    
+    x1_roi = max(0, x - time_margin)
+    x2_roi = min(img_w, x + w + time_margin)
+    y1_roi = 0
+    y2_roi = img_h
 
-import numpy as np
-import cv2
+    # Extraction de la sous-image locale
+    roi_image = image[y1_roi:y2_roi, x1_roi:x2_roi]
+    roi_h, roi_w = roi_image.shape
+
+    # Recalibrage des coordonnées de la cible dans le nouveau repère de la ROI
+    cx = x - x1_roi
+    cy = y - y1_roi
+
+    bg_mask = np.ones((roi_h, roi_w), dtype=bool)
+    bleed_mask = np.ones((roi_h, roi_w), dtype=bool)
+
+    padding_ratio = 2          # 1 * largeur de la box voisine
+    target_safe_margin = 5  # Marge de sécurité autour de la cible pour éviter de la contaminer avec les voisins
+
+    tx1 = cx
+    ty1 = cy
+    tx2 = cx + w
+    ty2 = cy + h
+
+    safe_tx1 = tx1 - target_safe_margin
+    safe_ty1 = ty1 - target_safe_margin
+    safe_tx2 = tx2 + target_safe_margin
+    safe_ty2 = ty2 + target_safe_margin
+
+    for box in all_boxes:
+        if box == target_box:
+            continue
+
+        bx, by, bw, bh = [int(v) for v in box]
+
+        other_box_padding = max(2, min(int(padding_ratio * bw), 70))
+
+        pbx1 = bx - other_box_padding
+        pby1 = by - other_box_padding
+        pbx2 = bx + bw + other_box_padding
+        pby2 = by + bh + other_box_padding
+
+        if pbx1 < x2_roi and pbx2 > x1_roi and pby1 < y2_roi and pby2 > y1_roi:
+            bx1_roi = max(0, pbx1 - x1_roi)
+            by1_roi = max(0, pby1 - y1_roi)
+            bx2_roi = min(roi_w, pbx2 - x1_roi)
+            by2_roi = min(roi_h, pby2 - y1_roi)
+
+            overlap_x1 = max(bx1_roi, safe_tx1)
+            overlap_y1 = max(by1_roi, safe_ty1)
+            overlap_x2 = min(bx2_roi, safe_tx2)
+            overlap_y2 = min(by2_roi, safe_ty2)
+
+            if overlap_x1 < overlap_x2 and overlap_y1 < overlap_y2:
+                rects = [
+                    (bx1_roi, by1_roi, bx2_roi, overlap_y1),
+                    (bx1_roi, overlap_y2, bx2_roi, by2_roi),
+                    (bx1_roi, overlap_y1, overlap_x1, overlap_y2),
+                    (overlap_x2, overlap_y1, bx2_roi, overlap_y2),
+                ]
+                for rx1, ry1, rx2, ry2 in rects:
+                    if rx1 < rx2 and ry1 < ry2:
+                        bg_mask[ry1:ry2, rx1:rx2] = False
+                        bleed_mask[ry1:ry2, rx1:rx2] = False
+            else:
+                bg_mask[by1_roi:by2_roi, bx1_roi:bx2_roi] = False
+                bleed_mask[by1_roi:by2_roi, bx1_roi:bx2_roi] = False
+
+    # Retirer également la boîte cible du bg_mask pour avoir le vrai bruit de fond
+    bg_mask[max(0, cy):min(roi_h, cy+h), max(0, cx):min(roi_w, cx+w)] = False
+
+    # --- BLOC DE DEBUG ---
+    if debug:
+        image_masqued = roi_image.copy()
+        image_masqued[~bleed_mask] = 0
+        cv2.rectangle(image_masqued, (cx, cy), (cx + w, cy + h), (255), 1)
+        filename = f"mask_{np.random.uniform(0, 1):.4f}.png"
+        cv2.imwrite(filename, image_masqued)
+    # ---------------------
+
+    return roi_image, bg_mask, bleed_mask, cx, cy
+
 
 def calculate_bleed_metrics_multi(image, target_box, all_boxes, time_margin=50, 
                                   freq_bleed_ratio=1.5, margin_ratio_underfill=0.05, 
@@ -137,59 +221,11 @@ def calculate_bleed_metrics_multi(image, target_box, all_boxes, time_margin=50,
     if w <= 0 or h <= 0 or x >= img_w or y >= img_h:
         return empty_metrics
 
-    # 1. DÉCOUPAGE DE LA ROI (Spatio-Temporelle)
-    freq_margin = int(h * freq_bleed_ratio)
-    
-    x1_roi = max(0, x - time_margin)
-    x2_roi = min(img_w, x + w + time_margin)
-    y1_roi = max(0, y - freq_margin)
-    y2_roi = min(img_h, y + h + freq_margin)
-
-    # Extraction de la sous-image locale
-    roi_image = image[y1_roi:y2_roi, x1_roi:x2_roi]
+    # 1 & 2. CRÉATION DU FILTRE (ROI et Masques) via la sous-fonction
+    roi_image, bg_mask, bleed_mask, cx, cy = make_filtre(
+        image, target_box, all_boxes, time_margin, freq_bleed_ratio, debug
+    )
     roi_h, roi_w = roi_image.shape
-
-    # Recalibrage des coordonnées de la cible dans le nouveau repère de la ROI
-    cx = x - x1_roi
-    cy = y - y1_roi
-
-    # 2. MASQUAGE DES VOISINS DANS LA ROI
-    bg_mask = np.ones((roi_h, roi_w), dtype=bool)
-    bleed_mask = np.ones((roi_h, roi_w), dtype=bool)
-
-    for box in all_boxes:
-        if box == target_box: continue
-        bx, by, bw, bh = [int(v) for v in box]
-        
-        # Vérifier si la boîte voisine intersecte notre ROI
-        if bx < x2_roi and (bx + bw) > x1_roi and by < y2_roi and (by + bh) > y1_roi:
-            # Conversion des coordonnées du voisin dans le repère de la ROI
-            bx1_roi = max(0, bx - x1_roi)
-            by1_roi = max(0, by - y1_roi)
-            bx2_roi = min(roi_w, bx + bw - x1_roi)
-            by2_roi = min(roi_h, by + bh - y1_roi)
-            
-            # Masquer le voisin
-            bg_mask[by1_roi:by2_roi, bx1_roi:bx2_roi] = False
-            bleed_mask[by1_roi:by2_roi, bx1_roi:bx2_roi] = False
-
-    # Retirer également la boîte cible du bg_mask pour avoir le vrai bruit de fond
-    bg_mask[max(0, cy):min(roi_h, cy+h), max(0, cx):min(roi_w, cx+w)] = False
-
-    # --- BLOC DE DEBUG (Sauvegarde de l'image masquée) ---
-    if debug:
-        # On copie l'image ROI pour ne pas altérer les vraies données
-        image_masqued = roi_image.copy()
-        
-        # On met en noir tout ce qui a été exclu par le bleed_mask (les signaux voisins)
-        image_masqued[~bleed_mask] = 0
-        
-        # Optionnel mais pratique : dessiner un rectangle clair (valeur 255) autour de notre cible
-        cv2.rectangle(image_masqued, (cx, cy), (cx + w, cy + h), (255), 1)
-
-        filename = f"mask_{np.random.uniform(0, 1):.4f}.png"
-        cv2.imwrite(filename, image_masqued)
-    # -----------------------------------------------------
 
     # 3. CALCUL DU BRUIT DE FOND LOCAL
     bg_pixels = roi_image[bg_mask]
@@ -231,7 +267,6 @@ def calculate_bleed_metrics_multi(image, target_box, all_boxes, time_margin=50,
     # --- 6. CALCUL BLEED (Bavement externe) ---
     y_pixels_out, x_pixels_out = [], []
     
-    # Extraction du bleed Y en utilisant le masque pour ignorer les éventuels voisins
     if cy > 0:
         top_roi = roi_image[0:cy, cx:cx+w]
         y_pixels_out.extend(top_roi[bleed_mask[0:cy, cx:cx+w]])
@@ -239,7 +274,6 @@ def calculate_bleed_metrics_multi(image, target_box, all_boxes, time_margin=50,
         bot_roi = roi_image[cy+h:roi_h, cx:cx+w]
         y_pixels_out.extend(bot_roi[bleed_mask[cy+h:roi_h, cx:cx+w]])
 
-    # Extraction du bleed X
     if cx > 0:
         left_roi = roi_image[cy:cy+h, 0:cx]
         x_pixels_out.extend(left_roi[bleed_mask[cy:cy+h, 0:cx]])
@@ -360,9 +394,9 @@ if __name__ == "__main__":
     file_path = "/home/antoine/Downloads/raw_STFT_start_0_length_1000000.png"
     meta_path = "/home/antoine/Downloads/west-wideband-modrec-ex1-tmpl2-20.04.sigmf-meta"
     print('=== Analyse du fichier 1 ===')
-    print(analyze_energy_on_one_image(file_path, meta_path, debug=True))
+    print(analyze_energy_on_one_image(file_path, meta_path, debug=False))
 
     file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/raw_Raised_Cosine_start_106028_length_1000000.png"
     meta_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/baseline/west-wideband-modrec-ex110-tmpl13-20.04.sigmf-meta"
     print('\n=== Analyse du fichier 2 ===')
-    print(analyze_energy_on_one_image(file_path, meta_path, debug=False))
+    print(analyze_energy_on_one_image(file_path, meta_path, debug=True))
