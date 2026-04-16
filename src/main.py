@@ -70,6 +70,13 @@ def main()->None:
     PARAMS['input_file'] = input_file
 
     print_transformation_params(PARAMS)
+
+    if args.analyzeEnergyOnFolder:
+        input_folder = str(args.analyzeEnergyOnFolder)
+        output_folder = os.path.join(input_folder, "energy_analysis")
+        ensure_dir(output_folder)
+        analyze_energy_dataset(input_folder, output_folder)
+        return None
     
     if args.runOnlyAnalyzeOnFolder:
         input_folder = str(args.runOnlyAnalyzeOnFolder)

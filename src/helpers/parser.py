@@ -104,4 +104,11 @@ def parse_args():
         help="Input folder containing .sigmf-data files (optional, used for both --runPipelineOnFolder and --runOnlyAnalyzeOnFolder)",
     )
 
+    parser.add_argument(
+        "--analyzeEnergyOnFolder",
+        type=Path,
+        default=None,
+        help="Output folder for analysis reports (optional, default is 'reports' in the current directory)",
+    )
+
     return parser.parse_args()

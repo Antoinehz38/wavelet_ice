@@ -17,6 +17,8 @@ dependencies = [
     "opencv-python",
     "PyWavelets",
     "dtcwt",
+    "pandas",
+    "seaborn",
 ]
 
 [tool.pytest.ini_options]
