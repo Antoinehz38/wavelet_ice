@@ -686,13 +686,13 @@ PARAMS = {
 }
 
 if __name__ == "__main__":
-    file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/spectrogram_20260414_093653.png"
+    file_path = "/home/antoine/Documents/ICE/projet/wavelet_ice/data/hp/spectrogram_20260414_093738.png"
     compressed_spec = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
     filename = file_path.split("/")[-1].replace(".png", "")
     mean_spec = temporal_mean_spectrogram(compressed_spec, delta_t=100)
 
     i = 19
-    smoothing_intensity = 0.03
+    smoothing_intensity = 0.023
     delta_t = 100
 
     smoothed_spec = apply_lowpass_filter(

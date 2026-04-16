@@ -52,23 +52,39 @@ def generer_rapports(df, dossier_sortie="rapports"):
         
     os.makedirs(dossier_sortie, exist_ok=True)
     
-    # ---------------------------------------------------------
-    # 1. Analyse Globale par Transformation (Moyenne générale)
-    # ---------------------------------------------------------
+    # Calcul des moyennes globales par transformation
     df_global = df.groupby('Transformation')[['Bleed_Overall', 'Underfill_Overall']].mean().reset_index()
     
-    # Passage en format "long" pour Seaborn
-    df_global_melted = df_global.melt(id_vars='Transformation', 
-                                      var_name='Metrique', 
-                                      value_name='Moyenne')
-
+    # ---------------------------------------------------------
+    # 1a. Analyse Globale : Bleed par Transformation
+    # ---------------------------------------------------------
     plt.figure(figsize=(10, 6))
-    sns.barplot(data=df_global_melted, x='Transformation', y='Moyenne', hue='Metrique', palette='Set2')
-    plt.title('Moyenne globale de Bleed et Underfill par Transformation')
-    plt.ylabel('Valeur Overall')
+    sns.barplot(data=df_global, x='Transformation', y='Bleed_Overall', color='#7ebfa7')
+    plt.title('Moyenne globale de Bleed par Transformation')
+    plt.ylabel('Bleed Overall')
     plt.xticks(rotation=45, ha='right')
+    # Ajout de la grille horizontale pour la lisibilité
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    # Met la grille en arrière-plan derrière les barres
+    plt.gca().set_axisbelow(True) 
     plt.tight_layout()
-    plt.savefig(os.path.join(dossier_sortie, 'global_par_transformation.png'), dpi=300)
+    plt.savefig(os.path.join(dossier_sortie, 'global_bleed_par_transformation.png'), dpi=300)
+    plt.close()
+
+    # ---------------------------------------------------------
+    # 1b. Analyse Globale : Underfill par Transformation
+    # ---------------------------------------------------------
+    plt.figure(figsize=(10, 6))
+    sns.barplot(data=df_global, x='Transformation', y='Underfill_Overall', color='#e8987e')
+    plt.title('Moyenne globale d\'Underfill par Transformation')
+    plt.ylabel('Underfill Overall')
+    plt.xticks(rotation=45, ha='right')
+    # Ajout de la grille horizontale pour la lisibilité
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    # Met la grille en arrière-plan derrière les barres
+    plt.gca().set_axisbelow(True) 
+    plt.tight_layout()
+    plt.savefig(os.path.join(dossier_sortie, 'global_underfill_par_transformation.png'), dpi=300)
     plt.close()
 
     # ---------------------------------------------------------
@@ -125,10 +141,4 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Exécution
-    print(f"Extraction des données depuis {args.dossier}...")
-    df_donnees = charger_donnees(args.dossier)
-    
-    if not df_donnees.empty:
-        print("Génération des graphiques en cours...")
-        generer_rapports(df_donnees, args.sortie)
+    make_pipeline_analyse_energy(args.dossier, args.sortie)
