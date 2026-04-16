@@ -114,13 +114,15 @@ def analyze_energy_on_one_image(file_path, meta_path):
     return metrics
 
 
-def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio=0.2):
+
+def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio_bleed=0.2, margin_ratio_underfill=0.05):
 
     x, y, w, h = [int(v) for v in target_box]
     img_h, img_w = image.shape
 
     x1, y1 = max(0, x), max(0, y)
     x2, y2 = min(img_w, x + w), min(img_h, y + h)
+    
     empty_metrics = {
         'bleed_x': 0.0, 'bleed_y': 0.0, 'bleed_overall': 0.0,
         'underfill_x': 1.0, 'underfill_y': 1.0, 'underfill_overall': 1.0
@@ -145,8 +147,8 @@ def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio=0.2
     if mean_in <= 0:
         return empty_metrics # Si la boîte est vide/plus sombre que le fond
 
-    margin_h_in = max(1, int((y2 - y1) * margin_ratio))
-    margin_w_in = max(1, int((x2 - x1) * margin_ratio))
+    margin_h_in = max(1, int((y2 - y1) * margin_ratio_underfill))
+    margin_w_in = max(1, int((x2 - x1) * margin_ratio_underfill))
     
     core_y1, core_y2 = min(y1 + margin_h_in, y2), max(y2 - margin_h_in, y1)
     core_x1, core_x2 = min(x1 + margin_w_in, x2), max(x2 - margin_w_in, x1)
@@ -172,10 +174,12 @@ def calculate_bleed_metrics_multi(image, target_box, all_boxes, margin_ratio=0.2
     mean_in_overall = np.mean(in_all_pixels) - bg_level if in_all_pixels.size > 0 else mean_in
     underfill_overall = max(0.0, 1.0 - (max(0, mean_in_overall) / mean_core))
 
-    margin_h = max(1, int(h * margin_ratio))
-    margin_w = max(1, int(w * margin_ratio))
+
+    margin_h = max(1, int(h * margin_ratio_bleed))
+    margin_w = max(1, int(w * margin_ratio_bleed))
     
     y_pixels, x_pixels = [], []
+    
     if y1 > 0:
         top_roi, top_mask = image[max(0, y1 - margin_h):y1, x1:x2], valid_mask[max(0, y1 - margin_h):y1, x1:x2]
         y_pixels.extend(top_roi[top_mask]) 
