@@ -12,7 +12,7 @@ from src.processing.tools.detection_helpers import (
 
 
 def detect_box(image, delta_t=100,
-               smoothing_intensity=0.015,
+               smoothing_intensity=0.03,
                detection_threshold=25,
                refinement_threshold=5,
                refinement_smoothing=0.1,
@@ -28,9 +28,7 @@ def detect_box(image, delta_t=100,
     )
 
     detections_list = detect_robust_signals(smoothed_spec, min_prominence=10, rolloff_threshold=roll_off_threshold)
-
-    refined = refine_temporal_borders(image, detections_list, delta_t, time_threshold=refinement_threshold, time_smoothing=refinement_smoothing)
-
+    refined = refine_temporal_borders(image, detections_list, delta_t, min_amplitude=5)
     boxes = merge_precise_detections(refined, smoothed_spectrogram=smoothed_spec, tolerance=15)
 
     return boxes

@@ -90,4 +90,18 @@ def parse_args():
         help="Input folder containing .sigmf-data files to process (optional, overrides --input)",
     )
 
+    parser.add_argument(
+        "--runOnlyAnalyzeOnFolder",
+        type=Path,
+        default=None,
+        help="Input folder containing .sigmf-data files to analyze (optional, overrides --input)",
+    )
+
+    parser.add_argument(
+        "--dataFolder",
+        type=Path,
+        default=None,
+        help="Input folder containing .sigmf-data files (optional, used for both --runPipelineOnFolder and --runOnlyAnalyzeOnFolder)",
+    )
+
     return parser.parse_args()

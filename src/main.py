@@ -1,4 +1,5 @@
-import os, datetime, json
+import os, datetime, json, re
+from collections import defaultdict
 from pathlib import Path
 import numpy as np
 from src.processing.tools.viz import build_output_dir_path, resolve_wavelet_name 
@@ -9,6 +10,7 @@ from src.cwt_scheduler import build_transition_windows
 from src.helpers.parser import parse_args
 from src.processing.tools.loaders import ensure_dir, load_metadata
 from src.processing.tools.evaluations import merge_boxes
+from src.processing.tools.energy_analyze import analyze_energy_dataset
 from src.helpers.display import print_transformation_params
 
 
@@ -69,6 +71,57 @@ def main()->None:
 
     print_transformation_params(PARAMS)
     
+    if args.runOnlyAnalyzeOnFolder:
+        input_folder = str(args.runOnlyAnalyzeOnFolder)
+        for signal_folder in os.listdir(input_folder):
+            complete_signal_folder = os.path.join(input_folder, signal_folder)
+
+            search_marker = f"-{signal_folder}-"
+            meta_path = None
+
+            try:
+                for filename in os.listdir(str(args.dataFolder)):
+                    if search_marker in filename and filename.endswith('.sigmf-meta'):
+                        meta_path = os.path.join(str(args.dataFolder), filename)
+                        break 
+            except FileNotFoundError:
+                print(f"Erreur : Le dossier dataFolder {str(args.dataFolder)} est introuvable.")
+                break
+
+            if not meta_path:
+                print(f"Attention : Aucun fichier .sigmf-meta trouvé pour [{signal_folder}]")
+                continue 
+
+            if not os.path.isdir(complete_signal_folder):
+                continue
+                
+            print(f"\n" + "="*50)
+            print(f"Dossier du signal : {signal_folder}")
+            print("="*50)
+            transformation_groups = defaultdict(list)
+
+            for filename in os.listdir(complete_signal_folder):
+                if filename.startswith('raw_') and filename.endswith('.png'):
+                    
+                    match = re.search(r'^raw_(.*?)_start_', filename)
+                    
+                    if match:
+                        transform_name = match.group(1) # ex: "Bump", "Raised_Cosine", "cmor220.0-1.0"
+                        full_path = os.path.join(complete_signal_folder, filename)
+                        
+                        transformation_groups[transform_name].append(full_path)
+
+
+            for transform_name, path_list in transformation_groups.items():
+                print(f"\n  -> Analyse de la transformation : [{transform_name}] ({len(path_list)} images)")
+                transform_report = analyze_energy_dataset(path_list, meta_path)
+
+                with open(os.path.join(complete_signal_folder, f"{wavelet_name}_energy.json"), "w") as f:
+                    json.dump(transform_report, f, indent=4)
+
+        return None
+
+
     if args.runPipelineOnFolder:
         input_folder = str(args.runPipelineOnFolder)
         output_dir = str(args.output)
@@ -121,16 +174,10 @@ def main()->None:
                     merged = merge_boxes(total_boxes)
                     print(f"\n=== Merged predictions: {len(merged['annotations'])} boxes ===")
                     print(merged['annotations'])
-
-
                     os.makedirs(output_path, exist_ok=True)
 
                     with open(os.path.join(output_path, f"{wavelet_name}_{timestamp}.json"), "w") as f:
                         json.dump(merged, f, indent=4)
-
-                
-                    
-
         return None 
 
     output_dir = str(args.output)
